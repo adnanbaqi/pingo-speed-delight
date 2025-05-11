@@ -1,12 +1,14 @@
 
 import { cn } from "@/lib/utils";
+import { memo } from 'react';
 
 interface PerformanceGradeProps {
   value: number;
   type: "ping" | "download" | "upload";
 }
 
-const PerformanceGrade = ({ value, type }: PerformanceGradeProps) => {
+// Memoized component for better performance
+const PerformanceGrade = memo(({ value, type }: PerformanceGradeProps) => {
   // Determine grade based on type and value
   const getGrade = () => {
     if (type === "ping") {
@@ -37,10 +39,13 @@ const PerformanceGrade = ({ value, type }: PerformanceGradeProps) => {
   
   return (
     <div className="flex items-center gap-2">
-      <span className={cn("font-bold text-2xl", color)}>{grade}</span>
-      <span className="text-xs text-muted-foreground">Grade</span>
+      <div className={cn("font-bold text-2xl flex items-center justify-center w-10 h-10 rounded-full border", color, "border-white/10")}>
+        {grade}
+      </div>
     </div>
   );
-};
+});
+
+PerformanceGrade.displayName = 'PerformanceGrade';
 
 export default PerformanceGrade;

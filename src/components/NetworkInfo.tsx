@@ -1,93 +1,141 @@
 
-import { useState, useEffect } from 'react';
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import { useState, useEffect, memo } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
-interface NetworkDetails {
-  ip: string;
-  provider: string;
-  networkName: string;
+interface NetworkInfoData {
   networkType: string;
+  networkName: string;
+  ipAddress: string;
+  provider: string;
+  connectionType: string;
+  deviceName: string;
+  browserName: string;
+  operatingSystem: string;
 }
 
-const NetworkInfo = () => {
-  const [networkDetails, setNetworkDetails] = useState<NetworkDetails>({
-    ip: '192.168.1.1',
-    provider: 'Detecting...',
-    networkName: 'Detecting...',
-    networkType: 'Detecting...'
+// Enhanced with memoization for better performance
+const NetworkInfo = memo(() => {
+  const [networkInfo, setNetworkInfo] = useState<NetworkInfoData>({
+    networkType: 'Unknown',
+    networkName: 'Unknown',
+    ipAddress: '0.0.0.0',
+    provider: 'Unknown',
+    connectionType: 'Unknown',
+    deviceName: 'Unknown',
+    browserName: 'Unknown',
+    operatingSystem: 'Unknown'
   });
-
-  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     // Simulate fetching network information
-    const detectNetworkDetails = async () => {
-      setIsLoading(true);
+    const fetchNetworkInfo = () => {
+      // In a real app, this would be an API call
+      const userAgent = navigator.userAgent;
       
-      try {
-        // In a real app, this would be an actual API call
-        // For now we'll simulate with a timeout and mock data
-        await new Promise(resolve => setTimeout(resolve, 1500));
-        
-        // Get connection type
-        const connection = (navigator as any).connection || 
-                          (navigator as any).mozConnection || 
-                          (navigator as any).webkitConnection;
-                          
-        let networkType = 'Unknown';
-        if (connection) {
-          networkType = connection.effectiveType || connection.type || 'Unknown';
-        }
-        
-        // Mock data - in a real app, you would fetch this from an API
-        setNetworkDetails({
-          ip: '203.0.113.' + Math.floor(Math.random() * 255),
-          provider: ['Spectrum', 'Comcast', 'AT&T', 'Verizon', 'T-Mobile'][Math.floor(Math.random() * 5)],
-          networkName: 'WiFi ' + String.fromCharCode(65 + Math.floor(Math.random() * 26)),
-          networkType: networkType !== 'Unknown' ? networkType : 
-                      ['WiFi', '4G', 'Cable', 'Fiber', 'DSL'][Math.floor(Math.random() * 5)]
-        });
-      } catch (error) {
-        console.error('Error fetching network details:', error);
-      } finally {
-        setIsLoading(false);
+      // Get the browser name
+      let browserName = 'Unknown';
+      if (userAgent.indexOf("Firefox") > -1) {
+        browserName = "Firefox";
+      } else if (userAgent.indexOf("Opera") > -1 || userAgent.indexOf("OPR") > -1) {
+        browserName = "Opera";
+      } else if (userAgent.indexOf("Edge") > -1) {
+        browserName = "Edge";
+      } else if (userAgent.indexOf("Chrome") > -1) {
+        browserName = "Chrome";
+      } else if (userAgent.indexOf("Safari") > -1) {
+        browserName = "Safari";
       }
+      
+      // Get the OS name
+      let osName = 'Unknown';
+      if (userAgent.indexOf("Windows") > -1) {
+        osName = "Windows";
+      } else if (userAgent.indexOf("Mac") > -1) {
+        osName = "MacOS";
+      } else if (userAgent.indexOf("Linux") > -1) {
+        osName = "Linux";
+      } else if (userAgent.indexOf("Android") > -1) {
+        osName = "Android";
+      } else if (userAgent.indexOf("iOS") > -1) {
+        osName = "iOS";
+      }
+      
+      // Get connection type
+      const connection = (navigator as any).connection || 
+                         (navigator as any).mozConnection || 
+                         (navigator as any).webkitConnection;
+      
+      let connectionType = 'Unknown';
+      if (connection) {
+        connectionType = connection.effectiveType || 'Unknown';
+      }
+      
+      // Simulate network data
+      setNetworkInfo({
+        networkType: 'WiFi',
+        networkName: 'Home Network',
+        ipAddress: '192.168.1.' + Math.floor(Math.random() * 255),
+        provider: 'Local ISP',
+        connectionType: connectionType,
+        deviceName: osName,
+        browserName: browserName,
+        operatingSystem: osName
+      });
     };
-
-    detectNetworkDetails();
+    
+    fetchNetworkInfo();
   }, []);
-
+  
   return (
-    <Card className="w-full">
+    <Card className="glass-dark">
       <CardHeader>
-        <CardTitle className="text-lg">Network Information</CardTitle>
+        <CardTitle className="text-xl">Network Information</CardTitle>
       </CardHeader>
       <CardContent>
-        {isLoading ? (
-          <div className="flex flex-col space-y-2">
-            <div className="h-4 bg-muted rounded animate-pulse w-3/4"></div>
-            <div className="h-4 bg-muted rounded animate-pulse w-1/2"></div>
-            <div className="h-4 bg-muted rounded animate-pulse w-2/3"></div>
-            <div className="h-4 bg-muted rounded animate-pulse w-1/4"></div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <div>
+              <h3 className="text-sm font-medium text-muted-foreground">Network Type</h3>
+              <p>{networkInfo.networkType}</p>
+            </div>
+            <div>
+              <h3 className="text-sm font-medium text-muted-foreground">Network Name</h3>
+              <p>{networkInfo.networkName}</p>
+            </div>
+            <div>
+              <h3 className="text-sm font-medium text-muted-foreground">IP Address</h3>
+              <p>{networkInfo.ipAddress}</p>
+            </div>
+            <div>
+              <h3 className="text-sm font-medium text-muted-foreground">Provider</h3>
+              <p>{networkInfo.provider}</p>
+            </div>
           </div>
-        ) : (
-          <dl className="grid grid-cols-2 gap-3 text-sm">
-            <dt className="font-medium text-muted-foreground">IP Address:</dt>
-            <dd className="font-mono">{networkDetails.ip}</dd>
-            
-            <dt className="font-medium text-muted-foreground">Provider:</dt>
-            <dd>{networkDetails.provider}</dd>
-            
-            <dt className="font-medium text-muted-foreground">Network Name:</dt>
-            <dd>{networkDetails.networkName}</dd>
-            
-            <dt className="font-medium text-muted-foreground">Connection Type:</dt>
-            <dd>{networkDetails.networkType}</dd>
-          </dl>
-        )}
+          
+          <div className="space-y-2">
+            <div>
+              <h3 className="text-sm font-medium text-muted-foreground">Connection Type</h3>
+              <p>{networkInfo.connectionType}</p>
+            </div>
+            <div>
+              <h3 className="text-sm font-medium text-muted-foreground">Device</h3>
+              <p>{networkInfo.deviceName}</p>
+            </div>
+            <div>
+              <h3 className="text-sm font-medium text-muted-foreground">Browser</h3>
+              <p>{networkInfo.browserName}</p>
+            </div>
+            <div>
+              <h3 className="text-sm font-medium text-muted-foreground">OS</h3>
+              <p>{networkInfo.operatingSystem}</p>
+            </div>
+          </div>
+        </div>
       </CardContent>
     </Card>
   );
-};
+});
+
+NetworkInfo.displayName = 'NetworkInfo';
 
 export default NetworkInfo;

@@ -1,5 +1,5 @@
 
-import { useState } from 'react';
+import { useState, memo } from 'react';
 import {
   LineChart,
   Line,
@@ -26,7 +26,8 @@ interface NetworkMetricsGraphProps {
   maxValue?: number;
 }
 
-const NetworkMetricsGraph = ({
+// Memoized component for better performance
+const NetworkMetricsGraph = memo(({
   title,
   data,
   color,
@@ -39,7 +40,7 @@ const NetworkMetricsGraph = ({
   }));
 
   return (
-    <Card className="w-full">
+    <Card className="w-full glass-dark">
       <CardHeader className="pb-0">
         <CardTitle className="text-lg">{title}</CardTitle>
       </CardHeader>
@@ -66,18 +67,22 @@ const NetworkMetricsGraph = ({
                   bottom: 5,
                 }}
               >
-                <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
-                <XAxis dataKey="time" />
+                <CartesianGrid strokeDasharray="3 3" opacity={0.1} />
+                <XAxis 
+                  dataKey="time"
+                  tick={{ fill: '#94a3b8' }}
+                />
                 <YAxis
                   domain={[0, 'auto']}
                   tickFormatter={(value) => `${value}`}
+                  tick={{ fill: '#94a3b8' }}
                   width={40}
                 />
                 <Tooltip
                   content={({ active, payload }) => {
                     if (active && payload && payload.length) {
                       return (
-                        <div className="rounded-lg border bg-background p-2 shadow-sm">
+                        <div className="rounded-lg border bg-black/80 backdrop-blur-lg p-3 shadow-md">
                           <div className="grid grid-cols-2 gap-2">
                             <div className="flex flex-col">
                               <span className="text-[0.70rem] uppercase text-muted-foreground">
@@ -92,7 +97,7 @@ const NetworkMetricsGraph = ({
                                 {title}
                               </span>
                               <span className="font-bold text-sm">
-                                {payload[0].value} {unit}
+                                {payload[0].value.toFixed(1)} {unit}
                               </span>
                             </div>
                           </div>
@@ -110,8 +115,9 @@ const NetworkMetricsGraph = ({
                   stroke={color}
                   strokeWidth={2}
                   dot={{ r: 2 }}
-                  activeDot={{ r: 4 }}
+                  activeDot={{ r: 4, stroke: color, strokeWidth: 2, fill: color }}
                   isAnimationActive={true}
+                  animationDuration={1000}
                 />
               </LineChart>
             </ResponsiveContainer>
@@ -120,6 +126,8 @@ const NetworkMetricsGraph = ({
       </CardContent>
     </Card>
   );
-};
+});
+
+NetworkMetricsGraph.displayName = 'NetworkMetricsGraph';
 
 export default NetworkMetricsGraph;

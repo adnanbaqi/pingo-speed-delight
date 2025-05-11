@@ -1,5 +1,5 @@
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, memo } from 'react';
 
 interface SpeedometerProps {
   value: number;
@@ -9,7 +9,8 @@ interface SpeedometerProps {
   color?: string;
 }
 
-const Speedometer = ({ 
+// Memoized component for better performance
+const Speedometer = memo(({ 
   value, 
   maxValue, 
   label, 
@@ -18,25 +19,33 @@ const Speedometer = ({
 }: SpeedometerProps) => {
   const [displayValue, setDisplayValue] = useState(0);
   
-  // Animate the value change
+  // Optimize animation with requestAnimationFrame
   useEffect(() => {
     if (value === displayValue) return;
     
-    const step = value > displayValue ? 
-      Math.max(1, Math.floor((value - displayValue) / 10)) : 
-      Math.min(-1, Math.floor((value - displayValue) / 10));
+    let start = displayValue;
+    const end = value;
+    const duration = 500; // ms
+    const startTime = performance.now();
     
-    const timer = setTimeout(() => {
-      setDisplayValue(current => {
-        const next = current + step;
-        if ((step > 0 && next >= value) || (step < 0 && next <= value)) {
-          return value;
-        }
-        return next;
-      });
-    }, 50);
+    const animate = (currentTime: number) => {
+      const elapsedTime = currentTime - startTime;
+      const progress = Math.min(elapsedTime / duration, 1);
+      const nextValue = start + (end - start) * progress;
+      
+      setDisplayValue(nextValue);
+      
+      if (progress < 1) {
+        requestAnimationFrame(animate);
+      }
+    };
     
-    return () => clearTimeout(timer);
+    requestAnimationFrame(animate);
+    
+    return () => {
+      // Clean up any pending animations if component unmounts
+      setDisplayValue(value);
+    };
   }, [value, displayValue]);
   
   // Calculate the percentage and angle for the gauge
@@ -49,23 +58,23 @@ const Speedometer = ({
         <span className="text-sm font-medium text-muted-foreground">{label}</span>
       </div>
       
-      {/* Gauge Background */}
+      {/* Gauge Background with improved visual effect */}
       <div className="relative w-48 h-24 overflow-hidden">
-        <div className="absolute top-0 left-0 w-full h-full bg-muted rounded-t-full"></div>
+        <div className="absolute top-0 left-0 w-full h-full bg-muted/30 rounded-t-full"></div>
         
-        {/* Gauge Fill */}
+        {/* Gauge Fill with glow effect */}
         <div 
-          className={`absolute top-0 left-0 w-full h-full ${color} rounded-t-full origin-bottom`}
+          className={`absolute top-0 left-0 w-full h-full ${color} rounded-t-full origin-bottom shadow-[0_0_15px_rgba(99,102,241,0.4)]`}
           style={{ transform: `rotate(${angle - 180}deg)` }}
         ></div>
         
         {/* Inner circle for 3D effect */}
-        <div className="absolute top-2 left-2 right-2 bottom-0 bg-background rounded-t-full"></div>
+        <div className="absolute top-2 left-2 right-2 bottom-0 bg-background/95 rounded-t-full backdrop-blur-sm"></div>
         
         {/* Gauge center line */}
         <div className="absolute bottom-0 left-1/2 w-1 h-1/2 bg-primary transform -translate-x-1/2 origin-bottom"
              style={{ transform: `translateX(-50%) rotate(${angle - 90}deg)` }}>
-          <div className="absolute -top-1 -left-1 w-3 h-3 rounded-full bg-primary"></div>
+          <div className="absolute -top-1 -left-1 w-3 h-3 rounded-full bg-primary shadow-[0_0_8px_rgba(99,102,241,0.6)]"></div>
         </div>
         
         {/* Tick marks */}
@@ -85,6 +94,8 @@ const Speedometer = ({
       </div>
     </div>
   );
-};
+});
+
+Speedometer.displayName = 'Speedometer';
 
 export default Speedometer;

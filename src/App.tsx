@@ -10,6 +10,17 @@ import About from "./pages/About";
 import SpeedTest from "./pages/SpeedTest";
 import NotFound from "./pages/NotFound";
 import Learn from "./pages/Learn";
+import { useEffect } from "react";
+
+// Function to enforce dark mode
+const DarkModeEnforcer = () => {
+  useEffect(() => {
+    // Force dark mode for AMOLED theme
+    document.documentElement.classList.add('dark');
+  }, []);
+  
+  return null;
+};
 
 const App = () => {
   // Create a client
@@ -19,6 +30,7 @@ const App = () => {
     <React.StrictMode>
       <QueryClientProvider client={queryClient}>
         <TooltipProvider>
+          <DarkModeEnforcer />
           <Toaster />
           <Sonner />
           <BrowserRouter>

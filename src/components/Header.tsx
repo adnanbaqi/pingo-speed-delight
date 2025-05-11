@@ -5,11 +5,11 @@ import PingoLogo from "./PingoLogo";
 
 const Header = () => {
   return (
-    <header className="sticky top-0 z-50 w-full border-b bg-background/80 backdrop-blur-md">
-      <div className="container flex h-16 items-center justify-between">
+    <header className="sticky top-0 z-50 w-full border-b border-white/10 bg-black/40 backdrop-blur-md">
+      <div className="container flex h-16 items-center justify-between px-4">
         <Link to="/" className="flex items-center gap-2">
           <PingoLogo className="h-8 w-8" />
-          <span className="font-bold text-xl">Pingo</span>
+          <span className="font-bold text-xl text-gradient">Pingo</span>
         </Link>
         
         <div className="flex items-center gap-4">
