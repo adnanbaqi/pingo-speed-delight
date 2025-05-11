@@ -34,11 +34,12 @@ const SpeedTestSettings = ({ useMBps, setUseMBps }: SpeedTestSettingsProps) => {
           </span>
         </div>
       </div>
-      <Button variant="outline" size="lg">
-                <Link to="/learn">
-                  Learn More
-                  </Link>
-    </Button>
+      <Button variant="outline" size="lg" className="w-full sm:w-auto">
+  <Link to="/learn" className="w-full h-full flex justify-center items-center">
+    Learn More
+  </Link>
+</Button>
+
     </div>
   );
 };
