@@ -24,12 +24,12 @@ const Header = () => {
             >
               Speed Test
             </Link>
-            <Link 
+            {/* <Link 
               to="/learn" 
               className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
             >
               Learn
-            </Link>
+            </Link> */}
             <Link 
               to="/about" 
               className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
@@ -62,13 +62,13 @@ const Header = () => {
     >
       Speed Test
     </Link>
-    <Link 
+    {/* <Link 
       to="/learn"
       className="text-2xl font-bold text-white hover:text-gray-300 w-full text-center"
       onClick={() => setMenuOpen(false)}
     >
       Learn
-    </Link>
+    </Link> */}
     <Link 
       to="/about"
       className="text-2xl font-bold text-white hover:text-gray-300 w-full text-center"
