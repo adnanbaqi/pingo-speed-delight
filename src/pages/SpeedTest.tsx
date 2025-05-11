@@ -9,6 +9,8 @@ import PerformanceGrade from '@/components/PerformanceGrade';
 import { simulatePing, simulateDownloadTest, simulateUploadTest } from '@/lib/speedTest';
 import { useAudio } from '@/hooks/useAudio';
 import { useToast } from '@/hooks/use-toast';
+import SpeedTestSettings from '@/components/SpeedTestSettings';
+import NetworkInfo from '@/components/NetworkInfo';
 
 type TestStage = 'idle' | 'ping' | 'download' | 'upload' | 'completed';
 
@@ -34,9 +36,26 @@ const SpeedTest = () => {
   });
   const [downloadData, setDownloadData] = useState<DataPoint[]>([]);
   const [uploadData, setUploadData] = useState<DataPoint[]>([]);
+  const [useMBps, setUseMBps] = useState<boolean>(false);
   
   const { playPingSound, playStartSound, playCompleteSound } = useAudio();
   const { toast } = useToast();
+
+  // Convert Mbps to MB/s if needed
+  const formatSpeed = (speedMbps: number | null): string => {
+    if (speedMbps === null) return "0";
+    
+    if (useMBps) {
+      // Convert Mbps to MB/s (1 MB/s = 8 Mbps)
+      return (speedMbps / 8).toFixed(1);
+    }
+    return speedMbps.toFixed(1);
+  };
+
+  // Get the current unit suffix
+  const getUnitSuffix = (): string => {
+    return useMBps ? "MB/s" : "Mbps";
+  };
 
   const startTest = async () => {
     setStage('ping');
@@ -82,7 +101,7 @@ const SpeedTest = () => {
       
       toast({
         title: "Download test completed",
-        description: `Speed: ${results.download?.toFixed(2)} Mbps. Starting upload test...`,
+        description: `Speed: ${formatSpeed(results.download)} ${getUnitSuffix()}. Starting upload test...`,
         duration: 3000,
       });
       
@@ -140,6 +159,11 @@ const SpeedTest = () => {
           </p>
         </div>
         
+        {/* Settings */}
+        {stage === 'idle' && (
+          <SpeedTestSettings useMBps={useMBps} setUseMBps={setUseMBps} />
+        )}
+        
         <div className="relative w-40 h-40 mb-4">
           <PingoLogo className="w-full h-full" animated={stage !== 'idle'} />
           {stage !== 'idle' && stage !== 'completed' && (
@@ -183,7 +207,7 @@ const SpeedTest = () => {
               value={currentSpeed} 
               maxValue={getMaxValue()}
               label={stage === 'download' ? 'Download Speed' : 'Upload Speed'} 
-              unit="Mbps"
+              unit={getUnitSuffix()}
               color={stage === 'download' ? 
                 "bg-gradient-to-r from-pingo-400 to-blue-500" : 
                 "bg-gradient-to-r from-green-400 to-teal-500"}
@@ -212,8 +236,8 @@ const SpeedTest = () => {
                 {results.download && <PerformanceGrade value={results.download} type="download" />}
               </div>
               <div className="text-3xl font-bold">
-                {results.download?.toFixed(1)}
-                <span className="text-xl ml-1 text-muted-foreground">Mbps</span>
+                {formatSpeed(results.download)}
+                <span className="text-xl ml-1 text-muted-foreground">{getUnitSuffix()}</span>
               </div>
               <p className="mt-2 text-sm text-muted-foreground">
                 {results.download && results.download > 100 ? 'Excellent' : 
@@ -227,14 +251,21 @@ const SpeedTest = () => {
                 {results.upload && <PerformanceGrade value={results.upload} type="upload" />}
               </div>
               <div className="text-3xl font-bold">
-                {results.upload?.toFixed(1)}
-                <span className="text-xl ml-1 text-muted-foreground">Mbps</span>
+                {formatSpeed(results.upload)}
+                <span className="text-xl ml-1 text-muted-foreground">{getUnitSuffix()}</span>
               </div>
               <p className="mt-2 text-sm text-muted-foreground">
                 {results.upload && results.upload > 50 ? 'Excellent' : 
                  results.upload && results.upload > 20 ? 'Good' : 'Could be better'}
               </p>
             </div>
+          </div>
+        )}
+
+        {/* Network Info */}
+        {stage === 'completed' && (
+          <div className="w-full mt-6">
+            <NetworkInfo />
           </div>
         )}
 
@@ -248,7 +279,7 @@ const SpeedTest = () => {
                 title="Download Speed"
                 data={downloadData}
                 color="#3b82f6"
-                unit="Mbps"
+                unit={getUnitSuffix()}
                 maxValue={200}
               />
               
@@ -256,7 +287,7 @@ const SpeedTest = () => {
                 title="Upload Speed"
                 data={uploadData}
                 color="#10b981"
-                unit="Mbps"
+                unit={getUnitSuffix()}
                 maxValue={100}
               />
             </div>

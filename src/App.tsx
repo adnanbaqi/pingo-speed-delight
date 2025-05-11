@@ -8,6 +8,7 @@ import Layout from "./components/Layout";
 import About from "./pages/About";
 import SpeedTest from "./pages/SpeedTest";
 import NotFound from "./pages/NotFound";
+import Learn from "./pages/Learn";
 import { useState } from "react";
 
 const App = () => {
@@ -24,6 +25,7 @@ const App = () => {
             <Route element={<Layout />}>
               <Route path="/" element={<SpeedTest />} />
               <Route path="/about" element={<About />} />
+              <Route path="/learn" element={<Learn />} />
             </Route>
             <Route path="*" element={<NotFound />} />
           </Routes>

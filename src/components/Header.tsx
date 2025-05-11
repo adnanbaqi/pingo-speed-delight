@@ -21,6 +21,12 @@ const Header = () => {
               Speed Test
             </Link>
             <Link 
+              to="/learn" 
+              className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Learn
+            </Link>
+            <Link 
               to="/about" 
               className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
             >
