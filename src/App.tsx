@@ -1,4 +1,5 @@
 
+import React from "react"; // Make sure React is explicitly imported
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -9,29 +10,30 @@ import About from "./pages/About";
 import SpeedTest from "./pages/SpeedTest";
 import NotFound from "./pages/NotFound";
 import Learn from "./pages/Learn";
-import { useState } from "react";
 
 const App = () => {
   // Create a client
-  const [queryClient] = useState(() => new QueryClient());
+  const queryClient = new QueryClient();
 
   return (
-    <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <Toaster />
-        <Sonner />
-        <BrowserRouter>
-          <Routes>
-            <Route element={<Layout />}>
-              <Route path="/" element={<SpeedTest />} />
-              <Route path="/about" element={<About />} />
-              <Route path="/learn" element={<Learn />} />
-            </Route>
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </BrowserRouter>
-      </TooltipProvider>
-    </QueryClientProvider>
+    <React.StrictMode>
+      <QueryClientProvider client={queryClient}>
+        <TooltipProvider>
+          <Toaster />
+          <Sonner />
+          <BrowserRouter>
+            <Routes>
+              <Route element={<Layout />}>
+                <Route path="/" element={<SpeedTest />} />
+                <Route path="/about" element={<About />} />
+                <Route path="/learn" element={<Learn />} />
+              </Route>
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </BrowserRouter>
+        </TooltipProvider>
+      </QueryClientProvider>
+    </React.StrictMode>
   );
 };
 
