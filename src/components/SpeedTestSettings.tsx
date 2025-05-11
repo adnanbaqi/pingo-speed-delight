@@ -3,6 +3,9 @@ import { useState } from 'react';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Info } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Link } from 'react-router-dom';
+
 
 interface SpeedTestSettingsProps {
   useMBps: boolean;
@@ -31,9 +34,11 @@ const SpeedTestSettings = ({ useMBps, setUseMBps }: SpeedTestSettingsProps) => {
           </span>
         </div>
       </div>
-      <a href="/learn" className="text-sm text-primary hover:underline">
-        Learn more
-      </a>
+      <Button variant="outline" size="lg">
+                <Link to="/learn">
+                  Learn More
+                  </Link>
+    </Button>
     </div>
   );
 };
