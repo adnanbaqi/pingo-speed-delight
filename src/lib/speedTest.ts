@@ -1,10 +1,10 @@
-
 // Simple speed test simulator
 // In a real app, this would use web sockets and actual data transfer
 
 type SpeedCallback = (speed: number) => void;
 type CompleteCallback = (finalSpeed: number) => void;
 type ProgressCallback = (percent: number) => void;
+type DataPointCallback = (time: number, value: number) => void;
 
 const PING_MIN = 5;
 const PING_MAX = 200;
@@ -35,6 +35,7 @@ export const simulatePing = (): Promise<number> => {
 export const simulateDownloadTest = (
   onSpeed: SpeedCallback,
   onProgress: ProgressCallback,
+  onDataPoint: DataPointCallback,
   onComplete: CompleteCallback
 ): { cancel: () => void } => {
   let isCancelled = false;
@@ -47,6 +48,7 @@ export const simulateDownloadTest = (
   const updateInterval = 200;
   const steps = testDuration / updateInterval;
   let currentStep = 0;
+  let maxSpeed = 0;
 
   const interval = setInterval(() => {
     if (isCancelled) {
@@ -61,6 +63,15 @@ export const simulateDownloadTest = (
     // Add jitter to make it look realistic
     const currentSpeed = addJitter(baseSpeed);
     onSpeed(currentSpeed);
+    
+    // Record data point for graph
+    const timeInSeconds = (currentStep * updateInterval) / 1000;
+    onDataPoint(timeInSeconds, currentSpeed);
+    
+    // Keep track of max speed
+    if (currentSpeed > maxSpeed) {
+      maxSpeed = currentSpeed;
+    }
     
     if (currentStep >= steps) {
       clearInterval(interval);
@@ -79,6 +90,7 @@ export const simulateDownloadTest = (
 export const simulateUploadTest = (
   onSpeed: SpeedCallback,
   onProgress: ProgressCallback,
+  onDataPoint: DataPointCallback,
   onComplete: CompleteCallback
 ): { cancel: () => void } => {
   let isCancelled = false;
@@ -91,6 +103,7 @@ export const simulateUploadTest = (
   const updateInterval = 200;
   const steps = testDuration / updateInterval;
   let currentStep = 0;
+  let maxSpeed = 0;
 
   const interval = setInterval(() => {
     if (isCancelled) {
@@ -105,6 +118,15 @@ export const simulateUploadTest = (
     // Add jitter to make it look realistic
     const currentSpeed = addJitter(baseSpeed);
     onSpeed(currentSpeed);
+    
+    // Record data point for graph
+    const timeInSeconds = (currentStep * updateInterval) / 1000;
+    onDataPoint(timeInSeconds, currentSpeed);
+    
+    // Keep track of max speed
+    if (currentSpeed > maxSpeed) {
+      maxSpeed = currentSpeed;
+    }
     
     if (currentStep >= steps) {
       clearInterval(interval);

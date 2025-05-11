@@ -4,6 +4,8 @@ import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import Speedometer from '@/components/Speedometer';
 import PingoLogo from '@/components/PingoLogo';
+import NetworkMetricsGraph from '@/components/NetworkMetricsGraph';
+import PerformanceGrade from '@/components/PerformanceGrade';
 import { simulatePing, simulateDownloadTest, simulateUploadTest } from '@/lib/speedTest';
 import { useAudio } from '@/hooks/useAudio';
 import { useToast } from '@/hooks/use-toast';
@@ -16,6 +18,11 @@ interface TestResults {
   upload: number | null;
 }
 
+interface DataPoint {
+  time: number;
+  value: number;
+}
+
 const SpeedTest = () => {
   const [stage, setStage] = useState<TestStage>('idle');
   const [currentSpeed, setCurrentSpeed] = useState(0);
@@ -25,6 +32,8 @@ const SpeedTest = () => {
     download: null,
     upload: null
   });
+  const [downloadData, setDownloadData] = useState<DataPoint[]>([]);
+  const [uploadData, setUploadData] = useState<DataPoint[]>([]);
   
   const { playPingSound, playStartSound, playCompleteSound } = useAudio();
   const { toast } = useToast();
@@ -38,6 +47,8 @@ const SpeedTest = () => {
       duration: 3000,
     });
     setResults({ ping: null, download: null, upload: null });
+    setDownloadData([]);
+    setUploadData([]);
     
     // Ping test
     const pingResult = await simulatePing();
@@ -55,6 +66,9 @@ const SpeedTest = () => {
     const downloadTest = simulateDownloadTest(
       (speed) => setCurrentSpeed(speed),
       (percent) => setProgress(percent),
+      (time, value) => {
+        setDownloadData(prev => [...prev, { time, value }]);
+      },
       (finalSpeed) => {
         setResults(prev => ({ ...prev, download: finalSpeed }));
         startUploadTest();
@@ -75,6 +89,9 @@ const SpeedTest = () => {
       simulateUploadTest(
         (speed) => setCurrentSpeed(speed),
         (percent) => setProgress(percent),
+        (time, value) => {
+          setUploadData(prev => [...prev, { time, value }]);
+        },
         (finalSpeed) => {
           setResults(prev => ({ ...prev, upload: finalSpeed }));
           completeTest();
@@ -178,7 +195,10 @@ const SpeedTest = () => {
         {stage === 'completed' && (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 w-full">
             <div className="bg-card rounded-lg p-6 shadow-sm flex flex-col items-center">
-              <h3 className="text-lg font-medium mb-2">Ping</h3>
+              <div className="flex justify-between w-full">
+                <h3 className="text-lg font-medium mb-2">Ping</h3>
+                {results.ping && <PerformanceGrade value={results.ping} type="ping" />}
+              </div>
               <div className="text-3xl font-bold">{results.ping}<span className="text-xl ml-1 text-muted-foreground">ms</span></div>
               <p className="mt-2 text-sm text-muted-foreground">
                 {results.ping && results.ping < 50 ? 'Excellent' : 
@@ -187,7 +207,10 @@ const SpeedTest = () => {
             </div>
             
             <div className="bg-card rounded-lg p-6 shadow-sm flex flex-col items-center">
-              <h3 className="text-lg font-medium mb-2">Download</h3>
+              <div className="flex justify-between w-full">
+                <h3 className="text-lg font-medium mb-2">Download</h3>
+                {results.download && <PerformanceGrade value={results.download} type="download" />}
+              </div>
               <div className="text-3xl font-bold">
                 {results.download?.toFixed(1)}
                 <span className="text-xl ml-1 text-muted-foreground">Mbps</span>
@@ -199,7 +222,10 @@ const SpeedTest = () => {
             </div>
             
             <div className="bg-card rounded-lg p-6 shadow-sm flex flex-col items-center">
-              <h3 className="text-lg font-medium mb-2">Upload</h3>
+              <div className="flex justify-between w-full">
+                <h3 className="text-lg font-medium mb-2">Upload</h3>
+                {results.upload && <PerformanceGrade value={results.upload} type="upload" />}
+              </div>
               <div className="text-3xl font-bold">
                 {results.upload?.toFixed(1)}
                 <span className="text-xl ml-1 text-muted-foreground">Mbps</span>
@@ -208,6 +234,31 @@ const SpeedTest = () => {
                 {results.upload && results.upload > 50 ? 'Excellent' : 
                  results.upload && results.upload > 20 ? 'Good' : 'Could be better'}
               </p>
+            </div>
+          </div>
+        )}
+
+        {/* Network Metrics Graphs */}
+        {stage === 'completed' && (
+          <div className="w-full space-y-6">
+            <h2 className="text-2xl font-bold mt-4">Detailed Performance Metrics</h2>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <NetworkMetricsGraph
+                title="Download Speed"
+                data={downloadData}
+                color="#3b82f6"
+                unit="Mbps"
+                maxValue={200}
+              />
+              
+              <NetworkMetricsGraph
+                title="Upload Speed"
+                data={uploadData}
+                color="#10b981"
+                unit="Mbps"
+                maxValue={100}
+              />
             </div>
           </div>
         )}
