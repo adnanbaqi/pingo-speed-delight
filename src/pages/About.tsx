@@ -45,7 +45,9 @@ const About = () => {
                   </Link>
                 </Button>
                 <Button variant="outline" size="lg">
+                <Link to="/learn">
                   Learn More
+                  </Link>
                 </Button>
               </div>
             </div>
