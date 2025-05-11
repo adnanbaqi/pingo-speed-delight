@@ -22,7 +22,7 @@ const features = [
   }
 ];
 
-const Index = () => {
+const About = () => {
   return (
     <div className="flex flex-col min-h-screen">
       {/* Hero Section */}
@@ -40,7 +40,7 @@ const Index = () => {
               </p>
               <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
                 <Button asChild size="lg" className="gap-2">
-                  <Link to="/test">
+                  <Link to="/">
                     Start Speed Test <ArrowRight className="w-4 h-4" />
                   </Link>
                 </Button>
@@ -122,7 +122,7 @@ const Index = () => {
           
           <div className="flex justify-center mt-10">
             <Button asChild size="lg">
-              <Link to="/test">Test My Speed Now</Link>
+              <Link to="/">Test My Speed Now</Link>
             </Button>
           </div>
         </div>
@@ -138,7 +138,7 @@ const Index = () => {
                 Get accurate measurements of your internet connection's performance in just a few clicks.
               </p>
               <Button asChild size="lg" variant="secondary" className="font-medium">
-                <Link to="/test">Start Free Speed Test</Link>
+                <Link to="/">Start Free Speed Test</Link>
               </Button>
             </div>
           </div>
@@ -163,4 +163,4 @@ const Index = () => {
   );
 };
 
-export default Index;
+export default About;

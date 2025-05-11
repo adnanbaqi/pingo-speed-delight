@@ -18,20 +18,14 @@ const Header = () => {
               to="/" 
               className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
             >
-              Home
-            </Link>
-            <Link 
-              to="/test" 
-              className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
-            >
               Speed Test
             </Link>
-            <a 
-              href="#" 
+            <Link 
+              to="/about" 
               className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
             >
               About
-            </a>
+            </Link>
           </nav>
           
           <ThemeToggle />
