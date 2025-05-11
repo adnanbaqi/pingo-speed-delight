@@ -22,8 +22,7 @@ const PingoLogo = ({ animated = false, ...props }: PingoLogoProps) => {
         cy="65" 
         rx="30" 
         ry="35" 
-        className="fill-slate-800 dark:fill-slate-900" 
-        className={animated ? "animate-bounce-soft" : ""}
+        className={`fill-slate-800 dark:fill-slate-900 ${animated ? "animate-bounce-soft" : ""}`}
       />
       
       {/* White Belly */}
