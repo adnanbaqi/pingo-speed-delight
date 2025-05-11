@@ -146,19 +146,17 @@ const About = () => {
       </section>
       
       {/* Footer */}
-      <footer className="py-8 border-t">
+      {/* <footer className="py-8 border-t">
         <div className="container mx-auto max-w-6xl px-4">
           <div className="flex flex-col md:flex-row justify-between items-center">
             <div className="flex items-center gap-2 mb-4 md:mb-0">
               <PingoLogo className="h-8 w-8" />
               <span className="font-bold text-xl">Pingo</span>
             </div>
-            <div className="text-sm text-muted-foreground">
-              © {new Date().getFullYear()} Pingo Speed Test. All rights reserved.
-            </div>
+           
           </div>
         </div>
-      </footer>
+      </footer> */}
     </div>
   );
 };
