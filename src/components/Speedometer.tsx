@@ -19,7 +19,7 @@ const Speedometer = memo(({
 }: SpeedometerProps) => {
   const [displayValue, setDisplayValue] = useState(0);
   
-  // Optimize animation with requestAnimationFrame
+  // Use RAF for smooth animation
   useEffect(() => {
     if (value === displayValue) return;
     
@@ -32,7 +32,9 @@ const Speedometer = memo(({
     const animate = (currentTime: number) => {
       const elapsedTime = currentTime - startTime;
       const progress = Math.min(elapsedTime / duration, 1);
-      const nextValue = start + (end - start) * progress;
+      // Use easeOutCubic for smoother animation
+      const easing = 1 - Math.pow(1 - progress, 3);
+      const nextValue = start + (end - start) * easing;
       
       setDisplayValue(nextValue);
       
@@ -44,7 +46,6 @@ const Speedometer = memo(({
     animationFrameId = requestAnimationFrame(animate);
     
     return () => {
-      // Clean up pending animations if component unmounts
       if (animationFrameId) {
         cancelAnimationFrame(animationFrameId);
       }
@@ -75,8 +76,10 @@ const Speedometer = memo(({
         <div className="absolute top-2 left-2 right-2 bottom-0 bg-background/95 rounded-t-full backdrop-blur-sm"></div>
         
         {/* Gauge center line */}
-        <div className="absolute bottom-0 left-1/2 w-1 h-1/2 bg-primary transform -translate-x-1/2 origin-bottom"
-             style={{ transform: `translateX(-50%) rotate(${angle - 90}deg)` }}>
+        <div 
+          className="absolute bottom-0 left-1/2 w-1 h-1/2 bg-primary transform -translate-x-1/2 origin-bottom"
+          style={{ transform: `translateX(-50%) rotate(${angle - 90}deg)` }}
+        >
           <div className="absolute -top-1 -left-1 w-3 h-3 rounded-full bg-primary shadow-[0_0_8px_rgba(99,102,241,0.6)]"></div>
         </div>
         

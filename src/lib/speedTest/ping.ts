@@ -5,55 +5,65 @@
  */
 export const simulatePing = async (): Promise<number> => {
   return new Promise((resolve) => {
-    // Start time measurement
-    const startTime = performance.now();
-    
-    // Use more reliable endpoints
+    // Use a variety of reliable endpoints
     const endpoints = [
       'https://www.google.com',
       'https://www.cloudflare.com',
       'https://www.microsoft.com',
-      'https://www.apple.com'
+      'https://www.amazon.com'
     ];
     
-    // Create image objects to ping servers (more reliable than fetch in some environments)
     const pingPromises = endpoints.map(endpoint => {
       return new Promise<number>((resolveEndpoint) => {
-        const img = new Image();
-        const pingStart = performance.now();
+        const startTime = performance.now();
         
-        const timeoutId = setTimeout(() => {
-          // Consider failed after 2 seconds
-          resolveEndpoint(2000);
-        }, 2000);
-        
-        img.onload = () => {
-          clearTimeout(timeoutId);
-          resolveEndpoint(performance.now() - pingStart);
-        };
-        
-        img.onerror = () => {
-          // Even errors can be used to measure ping
-          clearTimeout(timeoutId);
-          resolveEndpoint(performance.now() - pingStart);
-        };
-        
-        // Add cache buster
-        img.src = `${endpoint}/favicon.ico?rand=${Math.random()}`;
+        // Use fetch for more accurate timing than image loading
+        fetch(`${endpoint}/favicon.ico?cachebust=${Date.now()}`, { 
+          mode: 'no-cors',  // Allow cross-origin requests
+          cache: 'no-store' // Don't use cached results
+        })
+        .then(() => {
+          // Calculate round-trip time
+          resolveEndpoint(performance.now() - startTime);
+        })
+        .catch(() => {
+          // Use XMLHttpRequest as fallback
+          const xhr = new XMLHttpRequest();
+          const xhrStartTime = performance.now();
+          
+          xhr.onload = xhr.onerror = function() {
+            resolveEndpoint(performance.now() - xhrStartTime);
+          };
+          
+          xhr.open('GET', `${endpoint}/favicon.ico?cachebust=${Date.now()}`);
+          xhr.send();
+          
+          // Set timeout for this endpoint
+          setTimeout(() => resolveEndpoint(2000), 2000);
+        });
       });
     });
     
-    // Collect all successful pings and calculate average
+    // Calculate average ping from all endpoints
     Promise.all(pingPromises).then(results => {
-      // Remove outliers
-      results.sort((a, b) => a - b);
-      // Use middle values if we have enough results
-      const validPings = results.length > 3 
-        ? results.slice(1, -1) 
-        : results;
+      // Filter out timeouts and failures
+      const validResults = results.filter(time => time < 2000);
+      
+      if (validResults.length === 0) {
+        // All requests failed, return a high ping value
+        resolve(500);
+        return;
+      }
+      
+      // Remove outliers (sort and take middle values)
+      validResults.sort((a, b) => a - b);
+      
+      const trimmedResults = validResults.length > 3 
+        ? validResults.slice(1, -1) 
+        : validResults;
       
       const avgPing = Math.round(
-        validPings.reduce((sum, val) => sum + val, 0) / validPings.length
+        trimmedResults.reduce((sum, val) => sum + val, 0) / trimmedResults.length
       );
       
       resolve(avgPing);

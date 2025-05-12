@@ -1,9 +1,8 @@
 
 import { SpeedCallback, ProgressCallback, DataPointCallback, CompleteCallback, TestController } from './types';
-import { generateSimulatedData } from './utils';
 
 /**
- * Measures upload speed with more reliable approach
+ * Measures upload speed by sending data to endpoints
  */
 export const simulateUploadTest = (
   onSpeed: SpeedCallback,
@@ -14,39 +13,36 @@ export const simulateUploadTest = (
   let isCancelled = false;
   let testStartTime = performance.now();
   const testDuration = 10000; // 10 seconds
-  const updateInterval = 200; // 200ms updates
   const dataPoints: number[] = [];
   
-  // More reliable test endpoints
+  // Upload endpoints - these should accept POST requests
   const endpoints = [
     'https://httpbin.org/post',
-    'https://postman-echo.com/post'
-  ];
-  
-  let progress = 0;
-  
-  // Generate payloads of various sizes
-  const generatePayload = (sizeInKB: number): string => {
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-    let result = '';
-    const iterations = sizeInKB * 1024 / chars.length;
-    
-    for (let i = 0; i < iterations; i++) {
-      result += chars;
-    }
-    
-    return result;
-  };
-  
-  // Create payloads of different sizes
-  const payloads = [
-    generatePayload(20),   // 20KB
-    generatePayload(50),  // 50KB
-    generatePayload(100),  // 100KB
+    'https://www.postman-echo.com/post',
+    'https://reqres.in/api/users'
   ];
   
   const controller = new AbortController();
   const { signal } = controller;
+  
+  let progress = 0;
+  
+  // Generate binary data of specified size
+  const generateData = (sizeInKB: number): Blob => {
+    const array = new Uint8Array(sizeInKB * 1024);
+    for (let i = 0; i < array.length; i++) {
+      array[i] = Math.floor(Math.random() * 256);
+    }
+    return new Blob([array]);
+  };
+  
+  // Create test data blobs of different sizes
+  const testData = [
+    generateData(256),   // 256KB
+    generateData(512),   // 512KB
+    generateData(1024),  // 1MB
+    generateData(2048),  // 2MB
+  ];
   
   // Run upload test
   const runTest = () => {
@@ -57,77 +53,74 @@ export const simulateUploadTest = (
     progress = Math.min(100, ((now - testStartTime) / testDuration) * 100);
     onProgress(progress);
     
-    // If test duration exceeded, complete the test
+    // Complete test if duration is reached
     if (progress >= 100) {
+      // Calculate average speed
       const avgSpeed = dataPoints.length > 0 
         ? dataPoints.reduce((sum, val) => sum + val, 0) / dataPoints.length
-        : generateSimulatedData(5, 20); // Fallback to simulated data
+        : 0;
       
       onComplete(avgSpeed);
       return;
     }
     
-    // Choose a payload and endpoint
-    const payloadIndex = Math.floor(Math.random() * payloads.length);
-    const endpointIndex = Math.floor(Math.random() * endpoints.length);
-    const payload = payloads[payloadIndex];
-    const endpoint = endpoints[endpointIndex];
+    // Choose a random endpoint and data size
+    const endpoint = endpoints[Math.floor(Math.random() * endpoints.length)];
+    const data = testData[Math.floor(Math.random() * testData.length)];
     
-    // Track timing for this chunk
+    // Prepare FormData for the upload
+    const formData = new FormData();
+    formData.append('file', data, 'speedtest.bin');
+    
+    // Track upload timing
     const uploadStartTime = performance.now();
+    const uploadSize = data.size;
     
-    // Set timeout to abort the fetch after 3 seconds
-    const timeoutController = new AbortController();
-    const timeoutSignal = timeoutController.signal;
-    const timeoutId = setTimeout(() => timeoutController.abort(), 3000);
+    // Set timeout for this upload attempt
+    const timeoutId = setTimeout(() => {
+      console.log('Upload test timeout');
+      setTimeout(runTest, 200);
+    }, 5000);
     
-    // Perform the upload with timeout
+    // Perform the upload
     fetch(endpoint, {
       method: 'POST',
-      body: payload,
-      signal: timeoutSignal,
+      body: formData,
+      signal,
       headers: {
-        'Content-Type': 'text/plain'
+        'Accept': 'application/json'
       }
     })
-    .then(() => {
+    .then(response => {
       clearTimeout(timeoutId);
       
-      if (isCancelled) return;
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
       
+      // Calculate upload speed
       const uploadTime = performance.now() - uploadStartTime;
-      const bytesSent = payload.length;
+      const duration = uploadTime / 1000; // convert to seconds
       
-      // Calculate speed in Mbps
-      if (uploadTime > 0) {
-        // Convert bytes to megabits: bytes * 8 (bits) / 1000000 (to Mb)
-        const speed = (bytesSent * 8) / 1000000 / (uploadTime / 1000);
+      if (duration > 0) {
+        // Calculate speed in Mbps: bytes * 8 (bits) / 1000000 (to Mb) / duration (seconds)
+        const speed = (uploadSize * 8) / 1000000 / duration;
         
+        // Record data point
         const timePoint = (performance.now() - testStartTime) / 1000;
         onDataPoint(timePoint, speed);
         onSpeed(speed);
-        
         dataPoints.push(speed);
       }
       
-      setTimeout(runTest, 100);
+      // Continue with next upload
+      setTimeout(runTest, 200);
     })
     .catch(error => {
       clearTimeout(timeoutId);
+      console.log('Upload test error:', error.message);
       
-      // Don't log abort errors (they're expected)
-      if (error.name !== 'AbortError') {
-        console.log('Upload test retry:', error.message);
-      }
-      
-      // Use a "realistic" simulated speed when tests fail
-      const simulatedSpeed = generateSimulatedData(3, 15);
-      const timePoint = (performance.now() - testStartTime) / 1000;
-      onDataPoint(timePoint, simulatedSpeed);
-      onSpeed(simulatedSpeed);
-      dataPoints.push(simulatedSpeed);
-      
-      // Continue testing
+      // Continue testing with next attempt
       setTimeout(runTest, 200);
     });
   };

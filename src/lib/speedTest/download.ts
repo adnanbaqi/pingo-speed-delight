@@ -1,9 +1,8 @@
 
 import { SpeedCallback, ProgressCallback, DataPointCallback, CompleteCallback, TestController } from './types';
-import { generateSimulatedData } from './utils';
 
 /**
- * Measures download speed using more reliable methods
+ * Measures download speed using real file downloads
  */
 export const simulateDownloadTest = (
   onSpeed: SpeedCallback,
@@ -12,174 +11,135 @@ export const simulateDownloadTest = (
   onComplete: CompleteCallback
 ): TestController => {
   let isCancelled = false;
-  let totalBytesLoaded = 0;
-  let startTime = performance.now();
+  let testStartTime = performance.now();
   const testDuration = 10000; // 10 seconds
-  const updateInterval = 200; // 200ms updates
   const dataPoints: number[] = [];
   
-  // More reliable test files
+  // Array of test file URLs with different sizes
   const testFiles = [
-    "https://speed.cloudflare.com/__down?bytes=10000000", // 10MB Cloudflare
-    "https://edge.microsoft.com/captiveportal/generate_204", // Microsoft
-    "https://www.google.com/images/branding/googlelogo/1x/googlelogo_color_272x92dp.png", // Google logo
-    "https://upload.wikimedia.org/wikipedia/commons/thumb/f/ff/Wikipedia_logo_593.png/240px-Wikipedia_logo_593.png", // Wikipedia
+    // Cloudflare speed test files - these generate files of specific sizes
+    'https://speed.cloudflare.com/__down?bytes=1000000', // 1MB
+    'https://speed.cloudflare.com/__down?bytes=5000000', // 5MB
+    'https://speed.cloudflare.com/__down?bytes=10000000', // 10MB
+    // Fallback URLs in case Cloudflare is blocked
+    'https://cdn.jsdelivr.net/gh/librespeed/speedtest@master/garbage.php?ckSize=10',
+    'https://cdn.jsdelivr.net/npm/jquery@3.6.0/dist/jquery.min.js' // ~90KB
   ];
   
+  // Create an abort controller to cancel fetches if needed
   const controller = new AbortController();
   const { signal } = controller;
   
+  // Track download progress
   let progress = 0;
-  let testStartTime = performance.now();
   
-  // Start the test
+  // Function to run the download test
   const runTest = () => {
     if (isCancelled) return;
     
-    // Progress update
+    // Update progress
     const now = performance.now();
     progress = Math.min(100, ((now - testStartTime) / testDuration) * 100);
     onProgress(progress);
     
-    // If test duration exceeded, complete the test
+    // Complete test if duration is reached
     if (progress >= 100) {
-      // Use the average of collected data points or fallback to a reasonable estimate
+      // Calculate average speed from collected data points
       const avgSpeed = dataPoints.length > 0 
         ? dataPoints.reduce((sum, val) => sum + val, 0) / dataPoints.length
-        : generateSimulatedData(15, 50); // Fallback to simulated data
+        : 0;
       
       onComplete(avgSpeed);
       return;
     }
     
-    // Choose a file to test with
-    const fileIndex = Math.floor(Math.random() * testFiles.length);
-    const fileUrl = testFiles[fileIndex];
+    // Select a random test file
+    const fileUrl = testFiles[Math.floor(Math.random() * testFiles.length)];
     
-    // Add cache buster to prevent cached responses
-    const url = `${fileUrl}?cachebust=${Date.now()}`;
+    // Add cache buster
+    const url = `${fileUrl}${fileUrl.includes('?') ? '&' : '?'}cachebust=${Date.now()}`;
     
-    // Track timing for this attempt
-    const attemptStartTime = performance.now();
+    // Track timing for this download
+    const downloadStartTime = performance.now();
+    let bytesReceived = 0;
+    let lastUpdateTime = downloadStartTime;
+    let lastBytes = 0;
     
-    // Use fetch with timeout
-    const timeoutController = new AbortController();
-    const timeoutSignal = timeoutController.signal;
+    // Set up timeout to abort download after 5 seconds
+    const timeoutId = setTimeout(() => {
+      console.log('Download test timeout');
+      // Continue testing with next file
+      setTimeout(runTest, 200);
+    }, 5000);
     
-    // Set timeout to abort the fetch after 3 seconds
-    const timeoutId = setTimeout(() => timeoutController.abort(), 3000);
-    
-    // Attempt to fetch the file
+    // Use fetch with streams for accurate measurement
     fetch(url, { 
-      signal: timeoutSignal,
+      signal,
       cache: 'no-store',
-      mode: 'no-cors' // This allows testing with cross-origin resources
+      mode: 'cors' 
     })
-      .then(response => {
-        clearTimeout(timeoutId);
-        
-        if (!response.ok && response.status !== 0) { // status 0 can happen with no-cors
-          throw new Error('Network response was not ok');
-        }
-        
-        // For no-cors, we can't read the body, but we can measure time
-        if (response.type === 'opaque') {
-          const downloadTime = performance.now() - attemptStartTime;
-          // Estimate size (average logo is ~10KB)
-          const estimatedBytes = 10000;
-          
-          if (downloadTime > 0) {
-            // Convert to Mbps: bytes * 8 (bits) / 1000000 (to Mb) / time (seconds)
-            const estimatedSpeed = (estimatedBytes * 8) / 1000000 / (downloadTime / 1000);
-            
-            const timePoint = (performance.now() - testStartTime) / 1000;
-            onDataPoint(timePoint, estimatedSpeed);
-            onSpeed(estimatedSpeed);
-            
-            dataPoints.push(estimatedSpeed);
-          }
-          
-          // Continue testing
-          setTimeout(runTest, 100);
+    .then(response => {
+      clearTimeout(timeoutId);
+      
+      if (!response.ok && response.status !== 0) {
+        throw new Error('Network response was not ok');
+      }
+      
+      // Get total file size if available
+      const contentLength = parseInt(response.headers.get('Content-Length') || '0', 10);
+      
+      // Set up stream reader
+      const reader = response.body?.getReader();
+      if (!reader) {
+        throw new Error('Reader not available');
+      }
+      
+      // Process downloaded chunks
+      const processStream = async ({ done, value }: ReadableStreamReadResult<Uint8Array>): Promise<void> => {
+        if (done || isCancelled) {
+          // Continue with next file when done
+          setTimeout(runTest, 200);
           return;
         }
         
-        // For regular responses, we can read the body
-        const contentLength = Number(response.headers.get('Content-Length')) || 10000;
-        let receivedLength = 0;
+        // Track received bytes
+        bytesReceived += value.length;
         
-        const reader = response.body?.getReader();
-        if (!reader) {
-          // If we can't get a reader, use a time-based estimate
-          const downloadTime = performance.now() - attemptStartTime;
-          if (downloadTime > 0) {
-            const estimatedSpeed = (contentLength * 8) / 1000000 / (downloadTime / 1000);
-            
-            const timePoint = (performance.now() - testStartTime) / 1000;
-            onDataPoint(timePoint, estimatedSpeed);
-            onSpeed(estimatedSpeed);
-            
-            dataPoints.push(estimatedSpeed);
-          }
+        // Calculate speed every 200ms
+        const now = performance.now();
+        if (now - lastUpdateTime > 200) {
+          const duration = (now - lastUpdateTime) / 1000; // seconds
+          const chunkSize = bytesReceived - lastBytes;
           
-          setTimeout(runTest, 100);
-          return;
+          // Speed in Mbps: bytes * 8 (bits) / 1000000 (to Mb) / duration (seconds)
+          if (duration > 0) {
+            const currentSpeed = (chunkSize * 8) / 1000000 / duration;
+            
+            // Record data point
+            const timePoint = (now - testStartTime) / 1000;
+            onDataPoint(timePoint, currentSpeed);
+            onSpeed(currentSpeed);
+            dataPoints.push(currentSpeed);
+            
+            // Reset for next chunk
+            lastUpdateTime = now;
+            lastBytes = bytesReceived;
+          }
         }
-        
-        // Process the stream data
-        const processStream = ({ done, value }: ReadableStreamReadResult<Uint8Array>): Promise<void> => {
-          if (done || isCancelled) {
-            setTimeout(runTest, 100);
-            return Promise.resolve();
-          }
-          
-          receivedLength += value.length;
-          totalBytesLoaded += value.length;
-          
-          const now = performance.now();
-          const elapsed = now - startTime;
-          
-          // Update speed every updateInterval ms
-          if (elapsed > updateInterval) {
-            const durationSec = elapsed / 1000;
-            if (durationSec > 0) {
-              // Convert to Mbps
-              const currentSpeed = (totalBytesLoaded * 8) / 1000000 / durationSec;
-              
-              const timePoint = (now - testStartTime) / 1000;
-              onDataPoint(timePoint, currentSpeed);
-              onSpeed(currentSpeed);
-              
-              dataPoints.push(currentSpeed);
-              
-              totalBytesLoaded = 0;
-              startTime = now;
-            }
-          }
-          
-          return reader.read().then(processStream);
-        };
         
         return reader.read().then(processStream);
-      })
-      .catch(error => {
-        clearTimeout(timeoutId);
-        
-        // Don't log abort errors (they're expected)
-        if (error.name !== 'AbortError') {
-          console.log('Download test retry:', error.message);
-        }
-        
-        // Generate a "realistic" speed when tests fail
-        const simulatedSpeed = generateSimulatedData(10, 50);
-        const timePoint = (performance.now() - testStartTime) / 1000;
-        onDataPoint(timePoint, simulatedSpeed);
-        onSpeed(simulatedSpeed);
-        dataPoints.push(simulatedSpeed);
-        
-        // Continue testing
-        setTimeout(runTest, 200);
-      });
+      };
+      
+      // Start reading the stream
+      return reader.read().then(processStream);
+    })
+    .catch(error => {
+      clearTimeout(timeoutId);
+      console.log('Download test error:', error.message);
+      
+      // Try next file
+      setTimeout(runTest, 200);
+    });
   };
   
   // Start the test
