@@ -23,7 +23,8 @@ const Speedometer = memo(({
   useEffect(() => {
     if (value === displayValue) return;
     
-    let start = displayValue;
+    let animationFrameId: number;
+    const start = displayValue;
     const end = value;
     const duration = 500; // ms
     const startTime = performance.now();
@@ -36,15 +37,17 @@ const Speedometer = memo(({
       setDisplayValue(nextValue);
       
       if (progress < 1) {
-        requestAnimationFrame(animate);
+        animationFrameId = requestAnimationFrame(animate);
       }
     };
     
-    requestAnimationFrame(animate);
+    animationFrameId = requestAnimationFrame(animate);
     
     return () => {
-      // Clean up any pending animations if component unmounts
-      setDisplayValue(value);
+      // Clean up pending animations if component unmounts
+      if (animationFrameId) {
+        cancelAnimationFrame(animationFrameId);
+      }
     };
   }, [value, displayValue]);
   

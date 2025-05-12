@@ -11,3 +11,12 @@ export interface DataPoint {
   time: number;
   value: number;
 }
+
+export interface NetworkInfo {
+  ipAddress: string;
+  isp: string;
+  location: string;
+  device: string;
+  browser: string;
+  connection: string;
+}
