@@ -81,6 +81,7 @@ const NetworkMetricsGraph = memo(({
                 <Tooltip
                   content={({ active, payload }) => {
                     if (active && payload && payload.length) {
+                      const value = payload[0].value;
                       return (
                         <div className="rounded-lg border bg-black/80 backdrop-blur-lg p-3 shadow-md">
                           <div className="grid grid-cols-2 gap-2">
@@ -97,7 +98,7 @@ const NetworkMetricsGraph = memo(({
                                 {title}
                               </span>
                               <span className="font-bold text-sm">
-                                {payload[0].value.toFixed(1)} {unit}
+                                {typeof value === 'number' ? value.toFixed(1) : value} {unit}
                               </span>
                             </div>
                           </div>
