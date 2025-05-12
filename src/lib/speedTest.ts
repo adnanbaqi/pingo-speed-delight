@@ -1,73 +1,67 @@
-// Improved speed test simulator
-// In a real app, this would use web sockets and actual data transfer
+
+// Real network speed testing implementation
+// Uses multiple methods to get accurate results
 
 type SpeedCallback = (speed: number) => void;
 type CompleteCallback = (finalSpeed: number) => void;
 type ProgressCallback = (percent: number) => void;
 type DataPointCallback = (time: number, value: number) => void;
 
-const PING_MIN = 5;
-const PING_MAX = 200;
-
-// More realistic random speed generation
-const getRandomSpeed = (min: number, max: number, bias: number = 0.5) => {
-  // Use a more sophisticated algorithm for realistic speed distribution
-  // The bias parameter (0-1) determines whether speeds are more likely to be in the higher or lower range
-  const randomFactor = Math.pow(Math.random(), 1 - bias);
-  return min + randomFactor * (max - min);
-};
-
-// More accurate ping simulation
-const getRandomPing = (quality: number = 0.5): number => {
-  // Quality parameter (0-1) determines likelihood of lower ping values
-  // Higher quality = lower ping more likely
-  const distribution = Math.pow(Math.random(), quality);
-  return Math.floor(distribution * (PING_MAX - PING_MIN)) + PING_MIN;
-};
-
-// Enhanced jitter simulation that models real world conditions
-const addJitter = (
-  baseSpeed: number, 
-  time: number,
-  jitterPercent: number = 10, 
-  patternIntensity: number = 0.3
-) => {
-  // Add time-based pattern to simulate network congestion patterns
-  const jitterAmount = baseSpeed * (jitterPercent / 100);
-  const patternFactor = Math.sin(time * 3) * patternIntensity * jitterAmount;
-  const randomJitter = ((Math.random() * jitterAmount * 2) - jitterAmount);
-  
-  return baseSpeed + patternFactor + randomJitter;
-};
-
-// Improved ping test with variance
-export const simulatePing = (): Promise<number> => {
+/**
+ * Tests ping by measuring round-trip time to multiple endpoints
+ * @returns Promise with ping in ms
+ */
+export const simulatePing = async (): Promise<number> => {
   return new Promise((resolve) => {
-    const pingBase = getRandomPing(0.7);
-    const variance = pingBase * 0.1;
+    // Start time measurement
+    const startTime = performance.now();
     
-    // Run multiple ping measurements for more realistic results
-    const pings: number[] = [];
-    const pingCount = 5;
+    // Use fetch to multiple endpoints to get more accurate ping
+    const endpoints = [
+      'https://www.cloudflare.com/cdn-cgi/trace',
+      'https://www.google.com',
+      'https://www.microsoft.com'
+    ];
     
-    for (let i = 0; i < pingCount; i++) {
-      pings.push(pingBase + ((Math.random() * variance * 2) - variance));
-    }
+    const pingPromises = endpoints.map(endpoint => 
+      fetch(endpoint, { 
+        method: 'HEAD',
+        mode: 'no-cors', // This allows checking sites without CORS headers
+        cache: 'no-cache'
+      })
+      .then(() => performance.now() - startTime)
+      .catch(() => null) // Ignore errors
+    );
     
-    // Sort and remove highest and lowest (outliers)
-    pings.sort((a, b) => a - b);
-    const filteredPings = pings.slice(1, -1);
-    
-    // Calculate average from remaining values
-    const pingAverage = filteredPings.reduce((sum, val) => sum + val, 0) / filteredPings.length;
-    
-    setTimeout(() => {
-      resolve(Math.round(pingAverage));
-    }, 1500);
+    // Collect all successful pings and calculate average
+    Promise.all(pingPromises).then(results => {
+      const validPings = results.filter(result => result !== null) as number[];
+      
+      if (validPings.length === 0) {
+        // Fallback if all pings failed
+        resolve(100); // Default reasonable value
+        return;
+      }
+      
+      // Calculate average ping after removing outliers
+      validPings.sort((a, b) => a - b);
+      // Remove top and bottom if we have enough samples
+      const trimmedPings = validPings.length > 3 
+        ? validPings.slice(1, -1) 
+        : validPings;
+      
+      const avgPing = Math.round(
+        trimmedPings.reduce((sum, val) => sum + val, 0) / trimmedPings.length
+      );
+      
+      resolve(avgPing);
+    });
   });
 };
 
-// Enhanced download test with more realistic speed fluctuations
+/**
+ * Measures download speed using fetch and Blob measurements
+ */
 export const simulateDownloadTest = (
   onSpeed: SpeedCallback,
   onProgress: ProgressCallback,
@@ -75,88 +69,131 @@ export const simulateDownloadTest = (
   onComplete: CompleteCallback
 ): { cancel: () => void } => {
   let isCancelled = false;
+  let totalBytesLoaded = 0;
+  let startTime = performance.now();
+  const testDuration = 10000; // 10 seconds
+  const updateInterval = 200; // 200ms updates
+  const dataPoints: number[] = [];
   
-  // More realistic speed simulation
-  const connectionQuality = Math.random() * 0.6 + 0.4; // Between 0.4 and 1.0
-  const baseSpeed = getRandomSpeed(20, 180, connectionQuality);
+  // File sizes to test with (increasing sizes)
+  const testFiles = [
+    // Use files of different sizes for more accurate measurements
+    "https://cdn.jsdelivr.net/gh/mathiasbynens/small/empty.js", // Tiny
+    "https://cdn.jsdelivr.net/gh/mozilla/pdf.js@gh-pages/web/compressed.tracemonkey-pldi-09.pdf", // ~400KB
+    "https://cdn.jsdelivr.net/gh/videojs/http-streaming@master/docs/contribs/test-streams/bipbop/bipbop_16x9_variant.m3u8", // Stream manifest
+  ];
   
-  // Congestion modeling - speeds typically start higher then stabilize
-  const congestionFactor = 0.8 + Math.random() * 0.4; // Between 0.8 and 1.2
+  const controller = new AbortController();
+  const { signal } = controller;
   
-  // Test duration in milliseconds - longer for more accuracy
-  const testDuration = 10000;
-  const updateInterval = 200;
-  const steps = testDuration / updateInterval;
-  let currentStep = 0;
-  let totalSpeed = 0;
-  let dataPoints = 0;
-
-  // Map to store consistent jitter pattern
-  const jitterMap = new Map();
-  for (let i = 0; i <= Math.ceil(testDuration / 1000) + 1; i++) {
-    jitterMap.set(i, (Math.random() - 0.5) * 2);
-  }
-
-  const interval = setInterval(() => {
-    if (isCancelled) {
-      clearInterval(interval);
+  let progress = 0;
+  let lastSpeedUpdate = 0;
+  let testStartTime = performance.now();
+  
+  // Start the test
+  const runTest = () => {
+    if (isCancelled) return;
+    
+    // Progress update
+    progress = Math.min(100, ((performance.now() - testStartTime) / testDuration) * 100);
+    onProgress(progress);
+    
+    // If test duration exceeded, complete the test
+    if (progress >= 100) {
+      const avgSpeed = dataPoints.length > 0 
+        ? dataPoints.reduce((sum, val) => sum + val, 0) / dataPoints.length
+        : 0;
+      onComplete(avgSpeed);
       return;
     }
     
-    currentStep++;
-    const progress = (currentStep / steps) * 100;
-    onProgress(progress);
+    // Choose a file to test with
+    const fileIndex = Math.floor(Math.random() * testFiles.length);
+    const fileUrl = testFiles[fileIndex];
     
-    const timeInSeconds = (currentStep * updateInterval) / 1000;
-    const progressRatio = currentStep / steps;
+    // Add cache buster to prevent cached responses
+    const url = `${fileUrl}?cachebust=${Date.now()}`;
     
-    // Calculate dynamic speed based on time progression
-    // Early phases often show higher speeds that then stabilize
-    const dynamicBaseFactor = 
-      progressRatio < 0.1 ? 1.1 : // Initial burst
-      progressRatio < 0.3 ? 0.9 + Math.random() * 0.2 : // Slight drop
-      progressRatio < 0.7 ? 0.8 + Math.random() * 0.4 : // Stabilization with variation
-      0.75 + Math.random() * 0.5; // Final stabilization
-      
-    // Get jitter patterns from our pre-calculated map
-    const timeKey = Math.floor(timeInSeconds);
-    const jitterPattern = 
-      (jitterMap.get(timeKey) || 0) * 0.7 + 
-      (jitterMap.get(timeKey + 1) || 0) * 0.3;
-    
-    // Calculate current speed with enhanced jitter and patterns
-    const currentSpeed = baseSpeed * 
-      dynamicBaseFactor * 
-      congestionFactor * 
-      (1 + jitterPattern * 0.15);
-      
-    const finalCurrentSpeed = Math.max(5, currentSpeed); // Ensure speed never drops below 5Mbps
-    
-    onSpeed(finalCurrentSpeed);
-    onDataPoint(timeInSeconds, finalCurrentSpeed);
-    
-    // Keep running average for final result
-    totalSpeed += finalCurrentSpeed;
-    dataPoints++;
-    
-    if (currentStep >= steps) {
-      clearInterval(interval);
-      const avgSpeed = totalSpeed / dataPoints;
-      // Apply a slight correction factor to account for TCP slowstart and other real-world factors
-      const finalAvgSpeed = avgSpeed * 0.95;
-      onComplete(finalAvgSpeed);
-    }
-  }, updateInterval);
+    // Fetch with progress tracking
+    fetch(url, { signal, cache: 'no-store' })
+      .then(response => {
+        if (!response.ok) throw new Error('Network response was not ok');
+        
+        const reader = response.body?.getReader();
+        if (!reader) throw new Error('ReadableStream not supported');
+        
+        const contentLength = Number(response.headers.get('Content-Length')) || 0;
+        let receivedLength = 0;
+        let lastProgressTimestamp = performance.now();
+        let chunks: Uint8Array[] = [];
+
+        // Read the stream
+        const processStream = ({ done, value }: ReadableStreamReadResult<Uint8Array>): Promise<void> => {
+          if (done || isCancelled) {
+            return Promise.resolve();
+          }
+          
+          // Track progress
+          chunks.push(value);
+          receivedLength += value.length;
+          totalBytesLoaded += value.length;
+          
+          const now = performance.now();
+          const elapsed = now - lastProgressTimestamp;
+          
+          // Update speed every updateInterval ms
+          if (elapsed > updateInterval) {
+            const durationSec = (now - startTime) / 1000;
+            if (durationSec > 0) {
+              // Convert to Mbps: bytes * 8 (bits) / 1000000 (to Mb) / time (seconds)
+              const currentSpeed = (totalBytesLoaded * 8) / 1000000 / durationSec;
+              
+              // Record data point
+              const timePoint = (now - testStartTime) / 1000; // time in seconds
+              onDataPoint(timePoint, currentSpeed);
+              onSpeed(currentSpeed);
+              
+              // Store for average calculation
+              dataPoints.push(currentSpeed);
+              
+              // Reset for next interval
+              totalBytesLoaded = 0;
+              startTime = now;
+            }
+            
+            lastProgressTimestamp = now;
+          }
+          
+          // Continue reading
+          return reader.read().then(processStream);
+        };
+        
+        return reader.read().then(processStream);
+      })
+      .catch(error => {
+        if (error.name === 'AbortError') return;
+        console.error('Download test error:', error);
+      })
+      .finally(() => {
+        // Schedule next test iteration
+        setTimeout(runTest, 100);
+      });
+  };
+  
+  // Start the test
+  runTest();
   
   return {
     cancel: () => {
       isCancelled = true;
-      clearInterval(interval);
+      controller.abort();
     }
   };
 };
 
-// Enhanced upload test
+/**
+ * Measures upload speed by sending data to a server
+ */
 export const simulateUploadTest = (
   onSpeed: SpeedCallback,
   onProgress: ProgressCallback,
@@ -164,67 +201,117 @@ export const simulateUploadTest = (
   onComplete: CompleteCallback
 ): { cancel: () => void } => {
   let isCancelled = false;
+  let testStartTime = performance.now();
+  const testDuration = 10000; // 10 seconds
+  const updateInterval = 200; // 200ms updates
+  const dataPoints: number[] = [];
   
-  // Upload is typically more consistent but slower than download
-  const connectionQuality = Math.random() * 0.5 + 0.4; // Between 0.4 and 0.9
-  const baseSpeed = getRandomSpeed(5, 90, connectionQuality) * 0.7; // 70% of potential speed
+  // Create test endpoints (public echo servers)
+  const endpoints = [
+    'https://httpbin.org/post',
+    'https://postman-echo.com/post'
+  ];
   
-  // Test duration in milliseconds
-  const testDuration = 10000;
-  const updateInterval = 200;
-  const steps = testDuration / updateInterval;
-  let currentStep = 0;
-  let totalSpeed = 0;
-  let dataPoints = 0;
-
-  // Create consistent pattern map
-  const patternMap = new Map();
-  for (let i = 0; i <= Math.ceil(testDuration / 1000) + 1; i++) {
-    patternMap.set(i, (Math.random() - 0.5) * 2);
-  }
-
-  const interval = setInterval(() => {
-    if (isCancelled) {
-      clearInterval(interval);
+  let progress = 0;
+  let totalBytesSent = 0;
+  let startTime = performance.now();
+  
+  // Generate payloads of various sizes
+  const generatePayload = (sizeInKB: number): string => {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    let result = '';
+    const iterations = sizeInKB * 1024 / chars.length;
+    
+    for (let i = 0; i < iterations; i++) {
+      result += chars;
+    }
+    
+    return result;
+  };
+  
+  // Create payloads of different sizes
+  const payloads = [
+    generatePayload(10),   // 10KB
+    generatePayload(100),  // 100KB
+    generatePayload(500),  // 500KB
+  ];
+  
+  const controller = new AbortController();
+  const { signal } = controller;
+  
+  // Run upload test
+  const runTest = () => {
+    if (isCancelled) return;
+    
+    // Update progress
+    const now = performance.now();
+    progress = Math.min(100, ((now - testStartTime) / testDuration) * 100);
+    onProgress(progress);
+    
+    // If test duration exceeded, complete the test
+    if (progress >= 100) {
+      const avgSpeed = dataPoints.length > 0 
+        ? dataPoints.reduce((sum, val) => sum + val, 0) / dataPoints.length
+        : 0;
+      onComplete(avgSpeed);
       return;
     }
     
-    currentStep++;
-    const progress = (currentStep / steps) * 100;
-    onProgress(progress);
+    // Choose a payload and endpoint
+    const payloadIndex = Math.floor(Math.random() * payloads.length);
+    const endpointIndex = Math.floor(Math.random() * endpoints.length);
+    const payload = payloads[payloadIndex];
+    const endpoint = endpoints[endpointIndex];
     
-    const timeInSeconds = (currentStep * updateInterval) / 1000;
+    // Track timing for this chunk
+    const chunkStartTime = performance.now();
     
-    // Get pattern from map
-    const timeKey = Math.floor(timeInSeconds);
-    const patternFactor = 
-      (patternMap.get(timeKey) || 0) * 0.8 + 
-      (patternMap.get(timeKey + 1) || 0) * 0.2;
-    
-    // Upload speeds are more consistent but still have some jitter
-    const currentSpeed = baseSpeed * (1 + patternFactor * 0.1);
-    const finalCurrentSpeed = Math.max(1, currentSpeed);
-    
-    onSpeed(finalCurrentSpeed);
-    onDataPoint(timeInSeconds, finalCurrentSpeed);
-    
-    // Keep running average
-    totalSpeed += finalCurrentSpeed;
-    dataPoints++;
-    
-    if (currentStep >= steps) {
-      clearInterval(interval);
-      const avgSpeed = totalSpeed / dataPoints;
-      // Apply slight correction factor
-      const finalAvgSpeed = avgSpeed * 0.95;
-      onComplete(finalAvgSpeed);
-    }
-  }, updateInterval);
+    // Perform the upload
+    fetch(endpoint, {
+      method: 'POST',
+      body: payload,
+      signal,
+      headers: {
+        'Content-Type': 'text/plain'
+      }
+    })
+    .then(() => {
+      if (isCancelled) return;
+      
+      const uploadTime = performance.now() - chunkStartTime;
+      const bytesSent = payload.length;
+      totalBytesSent += bytesSent;
+      
+      // Calculate speed in Mbps
+      if (uploadTime > 0) {
+        // Convert bytes to megabits: bytes * 8 (bits) / 1000000 (to Mb)
+        const speed = (bytesSent * 8) / 1000000 / (uploadTime / 1000);
+        
+        const timePoint = (performance.now() - testStartTime) / 1000;
+        onDataPoint(timePoint, speed);
+        onSpeed(speed);
+        
+        // Store for average calculation
+        dataPoints.push(speed);
+      }
+    })
+    .catch(error => {
+      if (error.name === 'AbortError') return;
+      console.error('Upload test error:', error);
+    })
+    .finally(() => {
+      // Schedule next test iteration
+      setTimeout(runTest, 100);
+    });
+  };
+  
+  // Start the test
+  runTest();
   
   return {
     cancel: () => {
       isCancelled = true;
-      clearInterval(interval);
+      controller.abort();
     }
   };
 };
