@@ -12,7 +12,7 @@ export const simulateDownloadTest = (
 ): TestController => {
   let isCancelled = false;
   let testStartTime = performance.now();
-  const testDuration = 10000; // 10 seconds
+  const testDuration = 9000; // 10 seconds
   const dataPoints: number[] = [];
   
   // Array of test file URLs with different sizes
