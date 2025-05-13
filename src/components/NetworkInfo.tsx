@@ -46,9 +46,27 @@ const NetworkInfo = memo(() => {
         let connectionType = 'Unknown';
         let networkType = 'Unknown';
         
+        // Better network type detection
         if (connection) {
+          // For connection type (speed)
           connectionType = connection.effectiveType || 'Unknown';
-          networkType = connection.type || 'Unknown';
+          
+          // For network type
+          if (connection.type) {
+            networkType = connection.type;
+          } else if (typeof navigator.onLine !== 'undefined') {
+            // Fallback to basic online/offline detection
+            networkType = navigator.onLine ? 'Online' : 'Offline';
+            
+            // Try to determine WiFi vs Cellular using the effectiveType
+            if (navigator.onLine) {
+              if (connection.effectiveType === '4g') {
+                networkType = 'WiFi/High-speed';
+              } else if (['3g', '2g', 'slow-2g'].includes(connection.effectiveType)) {
+                networkType = 'Cellular/Mobile';
+              }
+            }
+          }
           
           // Clean up terminology
           if (networkType === 'wifi') networkType = 'WiFi';
@@ -56,6 +74,10 @@ const NetworkInfo = memo(() => {
           if (connectionType === '4g') connectionType = '4G';
           if (connectionType === '3g') connectionType = '3G';
           if (connectionType === '2g') connectionType = '2G';
+          if (connectionType === 'slow-2g') connectionType = 'EDGE/GPRS';
+        } else {
+          // Further fallback for browsers without connection API
+          networkType = navigator.onLine ? 'Online (type unknown)' : 'Offline';
         }
         
         // Get browser information
