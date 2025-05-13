@@ -1,7 +1,7 @@
 
 /**
- * Tests ping by measuring round-trip time to multiple endpoints
- * @returns Promise with ping in ms
+ * Tests unloaded latency by measuring round-trip time to multiple endpoints
+ * @returns Promise with latency in ms
  */
 export const simulatePing = async (): Promise<number> => {
   return new Promise((resolve) => {
@@ -17,56 +17,53 @@ export const simulatePing = async (): Promise<number> => {
       return new Promise<number>((resolveEndpoint) => {
         const startTime = performance.now();
         
-        // Use fetch for more accurate timing than image loading
         fetch(`${endpoint}/favicon.ico?cachebust=${Date.now()}`, { 
-          mode: 'no-cors',  // Allow cross-origin requests
-          cache: 'no-store' // Don't use cached results
+          mode: 'no-cors',
+          cache: 'no-store',
+          credentials: 'omit', // Avoid sending cookies for faster requests
+          priority: 'high',    // Signal high priority to browser
         })
         .then(() => {
-          // Calculate round-trip time
-          resolveEndpoint(performance.now() - startTime);
+          const latency = performance.now() - startTime;
+          resolveEndpoint(latency);
         })
         .catch(() => {
-          // Use XMLHttpRequest as fallback
-          const xhr = new XMLHttpRequest();
-          const xhrStartTime = performance.now();
+          // Try with image as fallback (works better in some browsers)
+          const img = new Image();
+          const imgStartTime = performance.now();
           
-          xhr.onload = xhr.onerror = function() {
-            resolveEndpoint(performance.now() - xhrStartTime);
+          img.onload = img.onerror = function() {
+            const imgLatency = performance.now() - imgStartTime;
+            resolveEndpoint(imgLatency);
           };
           
-          xhr.open('GET', `${endpoint}/favicon.ico?cachebust=${Date.now()}`);
-          xhr.send();
+          img.src = `${endpoint}/favicon.ico?cachebust=${Date.now()}`;
           
           // Set timeout for this endpoint
-          setTimeout(() => resolveEndpoint(2000), 2000);
+          setTimeout(() => resolveEndpoint(1500), 1500);
         });
       });
     });
     
-    // Calculate average ping from all endpoints
+    // Calculate median latency from all endpoints
     Promise.all(pingPromises).then(results => {
       // Filter out timeouts and failures
-      const validResults = results.filter(time => time < 2000);
+      const validResults = results.filter(time => time < 1500);
       
       if (validResults.length === 0) {
-        // All requests failed, return a high ping value
+        // All requests failed, return a high latency value
         resolve(500);
         return;
       }
       
-      // Remove outliers (sort and take middle values)
+      // Use median value (more accurate than mean for latency)
       validResults.sort((a, b) => a - b);
       
-      const trimmedResults = validResults.length > 3 
-        ? validResults.slice(1, -1) 
-        : validResults;
+      const medianLatency = validResults.length % 2 === 0
+        ? Math.round((validResults[validResults.length / 2 - 1] + validResults[validResults.length / 2]) / 2)
+        : Math.round(validResults[Math.floor(validResults.length / 2)]);
       
-      const avgPing = Math.round(
-        trimmedResults.reduce((sum, val) => sum + val, 0) / trimmedResults.length
-      );
-      
-      resolve(avgPing);
+      resolve(medianLatency);
     });
   });
 };

@@ -18,7 +18,7 @@ const TestResults = ({ stage, results, formatSpeed, getUnitSuffix }: TestResults
     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 w-full">
       <div className="bg-card rounded-lg p-6 shadow-sm flex flex-col items-center">
         <div className="flex justify-between w-full">
-          <h3 className="text-lg font-medium mb-2">Ping</h3>
+          <h3 className="text-lg font-medium mb-2">Latency (Unloaded)</h3>
           {results.ping && <PerformanceGrade value={results.ping} type="ping" />}
         </div>
         <div className="text-3xl font-bold">{results.ping}<span className="text-xl ml-1 text-muted-foreground">ms</span></div>

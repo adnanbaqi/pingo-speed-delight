@@ -46,7 +46,7 @@ const TestInformation = ({ stage, downloadData, uploadData, getUnitSuffix }: Tes
       <div className="bg-muted/50 rounded-lg p-4 w-full">
         <h3 className="font-medium mb-2">What do these results mean?</h3>
         <p className="text-sm text-muted-foreground mb-2">
-          <strong>Ping:</strong> Measures the time it takes for data to travel from your device to a server and back. 
+          <strong>Latency:</strong> Measures the time it takes for data to travel from your device to a server and back. 
           Lower is better. Under 50ms is excellent for most activities including gaming.
         </p>
         <p className="text-sm text-muted-foreground mb-2">
