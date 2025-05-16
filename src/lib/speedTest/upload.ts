@@ -13,7 +13,7 @@ export const simulateUploadTest = (
 ): TestController => {
   let isCancelled = false;
   let testStartTime = performance.now();
-  const testDuration = 30000; // 10 seconds
+  const testDuration = 15000; // 15 seconds
   const dataPoints: number[] = [];
   let lastReportedSpeed = 0;
   
