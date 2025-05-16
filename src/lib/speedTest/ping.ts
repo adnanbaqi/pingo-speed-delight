@@ -1,13 +1,19 @@
-
 /**
  * Tests unloaded latency by measuring round-trip time to multiple endpoints
- * with improved reliability and realistic fallbacks
- * @returns Promise with latency in ms
+ * @param options Optional configuration parameters
+ * @returns Promise with latency in ms, or -1 if all endpoints fail
  */
-export const simulatePing = async (): Promise<number> => {
-  return new Promise((resolve) => {
-    // Use a variety of reliable endpoints
-    const endpoints = [
+export const simulatePing = async (options?: {
+  endpoints?: string[];
+  timeout?: number;
+  endpointTimeout?: number;
+  minAcceptableLatency?: number;
+  maxAcceptableLatency?: number;
+  correctionFactor?: number;
+}): Promise<number> => {
+  // Default parameters with destructuring
+  const {
+    endpoints = [
       'https://www.google.com',
       'https://www.cloudflare.com',
       'https://www.microsoft.com',
@@ -16,29 +22,54 @@ export const simulatePing = async (): Promise<number> => {
       'https://www.netflix.com',
       'https://cdn.jsdelivr.net',
       'https://www.wikipedia.org'
-    ];
-    
-    // Create an AbortController to handle timeouts
+    ],
+    timeout = 5000,
+    endpointTimeout = 1500,
+    minAcceptableLatency = 5,
+    maxAcceptableLatency = 1500,
+    correctionFactor = 0.85
+  } = options || {};
+
+  return new Promise((resolve) => {
     const controller = new AbortController();
     const { signal } = controller;
     
-    // Set a timeout for the entire ping test
-    const timeout = setTimeout(() => {
+    // Master timeout – abort all after the specified timeout
+    const timeoutId = setTimeout(() => {
       controller.abort();
-      // Return a more realistic ping value
-      resolve(generateRealisticPing());
-    }, 5000);
-    
+      resolve(-1); // Indicate failure
+    }, timeout);
+
+    // Function to create cache-busting URL
+    const createCacheBustUrl = (url: string) => 
+      `${url}/favicon.ico?cachebust=${Date.now()}-${Math.random().toString(36).substring(2, 10)}`;
+
+    // Function to attempt fallback image measurement
+    const attemptImageFallback = (endpoint: string): Promise<number> => {
+      return new Promise<number>((resolveImg) => {
+        const img = new Image();
+        const imgStartTime = performance.now();
+        const imgTimeout = setTimeout(() => resolveImg(endpointTimeout), endpointTimeout);
+        
+        img.onload = img.onerror = () => {
+          clearTimeout(imgTimeout);
+          const imgLatency = performance.now() - imgStartTime;
+          resolveImg(imgLatency);
+        };
+        
+        img.src = createCacheBustUrl(endpoint);
+      });
+    };
+
+    // Map over endpoints to create array of ping promises
     const pingPromises = endpoints.map(endpoint => {
       return new Promise<number>((resolveEndpoint) => {
         const startTime = performance.now();
-        
-        // Set timeout for individual endpoint
-        const endpointTimeout = setTimeout(() => {
-          resolveEndpoint(1500); // Timeout value
-        }, 1500);
-        
-        fetch(`${endpoint}/favicon.ico?cachebust=${Date.now()}`, { 
+        const endpointTimeoutId = setTimeout(() => {
+          resolveEndpoint(endpointTimeout); // Treat as timeout
+        }, endpointTimeout);
+
+        fetch(createCacheBustUrl(endpoint), {
           mode: 'no-cors',
           cache: 'no-store',
           credentials: 'omit',
@@ -46,76 +77,49 @@ export const simulatePing = async (): Promise<number> => {
           signal
         })
         .then(() => {
-          clearTimeout(endpointTimeout);
+          clearTimeout(endpointTimeoutId);
           const latency = performance.now() - startTime;
           resolveEndpoint(latency);
         })
         .catch(() => {
-          clearTimeout(endpointTimeout);
-          
-          // Try with image as fallback (works better in some browsers)
-          const img = new Image();
-          const imgStartTime = performance.now();
-          
-          img.onload = img.onerror = function() {
-            const imgLatency = performance.now() - imgStartTime;
-            resolveEndpoint(imgLatency);
-          };
-          
-          img.src = `${endpoint}/favicon.ico?cachebust=${Date.now()}`;
+          clearTimeout(endpointTimeoutId);
+          // Fallback to image-based measurement
+          attemptImageFallback(endpoint).then(resolveEndpoint);
         });
       });
     });
-    
-    // Calculate median latency from all endpoints
+
+    // Process results
     Promise.all(pingPromises).then(results => {
-      clearTimeout(timeout);
+      clearTimeout(timeoutId);
       
-      // Filter out timeouts and failures
-      const validResults = results.filter(time => time < 1500 && time > 5);
+      // Filter valid results
+      const validResults = results.filter(
+        time => time < maxAcceptableLatency && time > minAcceptableLatency
+      );
       
       if (validResults.length === 0) {
-        // All requests failed, return a realistic ping value
-        resolve(generateRealisticPing());
+        resolve(-1); // All failed
         return;
       }
       
-      // Use median value (more accurate than mean for latency)
+      // Sort results for median calculation
       validResults.sort((a, b) => a - b);
       
+      // Calculate median latency
       const medianLatency = validResults.length % 2 === 0
-        ? Math.round((validResults[validResults.length / 2 - 1] + validResults[validResults.length / 2]) / 2)
-        : Math.round(validResults[Math.floor(validResults.length / 2)]);
+        ? (validResults[validResults.length / 2 - 1] + validResults[validResults.length / 2]) / 2
+        : validResults[Math.floor(validResults.length / 2)];
       
-      // Apply a correction factor to account for measurement overhead
-      // This makes the ping value more realistic for most connections
-      const correctedLatency = Math.max(15, medianLatency * 0.85);
+      // Apply correction factor
+      const correctedLatency = Math.max(minAcceptableLatency, medianLatency * correctionFactor);
       
+      // Return rounded result
       resolve(Math.round(correctedLatency));
+    }).catch(() => {
+      // Handle any unexpected errors in Promise.all
+      clearTimeout(timeoutId);
+      resolve(-1);
     });
   });
 };
-
-// Generate a realistic ping value that follows typical internet latency distribution
-function generateRealisticPing(): number {
-  const pingRanges = [
-    { min: 10, max: 30, probability: 0.2 },   // Excellent fiber
-    { min: 30, max: 60, probability: 0.3 },   // Good broadband
-    { min: 60, max: 100, probability: 0.3 },  // Average connection
-    { min: 100, max: 150, probability: 0.15 }, // Slower connection
-    { min: 150, max: 300, probability: 0.05 }  // Poor connection
-  ];
-  
-  const rand = Math.random();
-  let cumulativeProbability = 0;
-  
-  for (const range of pingRanges) {
-    cumulativeProbability += range.probability;
-    if (rand <= cumulativeProbability) {
-      return Math.floor(range.min + Math.random() * (range.max - range.min));
-    }
-  }
-  
-  // Fallback
-  return 60;
-}
