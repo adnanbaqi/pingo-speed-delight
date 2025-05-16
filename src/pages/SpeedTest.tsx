@@ -7,7 +7,7 @@ import CurrentSpeedometer from '@/components/CurrentSpeedometer';
 import TestResults from '@/components/TestResults';
 import TestInformation from '@/components/TestInformation';
 import { useSpeedTest } from '@/hooks/useSpeedTest';
-import { Helmet } from 'react-helmet';
+import { Helmet } from 'react-helmet-async';
 
 const SpeedTest = () => {
   const {
