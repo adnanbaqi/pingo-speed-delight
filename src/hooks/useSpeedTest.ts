@@ -17,6 +17,7 @@ export const useSpeedTest = () => {
   const [downloadData, setDownloadData] = useState<DataPoint[]>([]);
   const [uploadData, setUploadData] = useState<DataPoint[]>([]);
   const [useMBps, setUseMBps] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
   
   const { playPingSound, playStartSound, playCompleteSound } = useAudio();
   const { toast } = useToast();
@@ -38,6 +39,8 @@ export const useSpeedTest = () => {
   };
 
   const startTest = async () => {
+    // Reset previous results and errors
+    setError(null);
     setStage('ping');
     playStartSound();
     toast({
@@ -49,42 +52,48 @@ export const useSpeedTest = () => {
     setDownloadData([]);
     setUploadData([]);
     
-    // Ping test
-    const pingResult = await simulatePing();
-    playPingSound();
-    setResults(prev => ({ ...prev, ping: pingResult }));
-    
-    // Download test
-    setStage('download');
-    toast({
-      title: "Ping test completed",
-      description: `Latency: ${pingResult}ms. Starting download test...`,
-      duration: 3000,
-    });
-    
-    const downloadTest = simulateDownloadTest(
-      (speed) => setCurrentSpeed(speed),
-      (percent) => setProgress(percent),
-      (time, value) => {
-        setDownloadData(prev => [...prev, { time, value }]);
-      },
-      (finalSpeed) => {
-        setResults(prev => ({ ...prev, download: finalSpeed }));
-        startUploadTest();
-      }
-    );
-    
-    const startUploadTest = () => {
-      setStage('upload');
-      setProgress(0);
-      setCurrentSpeed(0);
+    try {
+      // Ping test
+      const pingResult = await simulatePing();
+      playPingSound();
+      setResults(prev => ({ ...prev, ping: pingResult }));
       
+      // Download test
+      setStage('download');
       toast({
-        title: "Download test completed",
-        description: `Speed: ${formatSpeed(results.download)} ${getUnitSuffix()}. Starting upload test...`,
+        title: "Ping test completed",
+        description: `Latency: ${pingResult}ms. Starting download test...`,
         duration: 3000,
       });
       
+      const downloadController = simulateDownloadTest(
+        (speed) => setCurrentSpeed(speed),
+        (percent) => setProgress(percent),
+        (time, value) => {
+          setDownloadData(prev => [...prev, { time, value }]);
+        },
+        (finalSpeed) => {
+          setResults(prev => ({ ...prev, download: finalSpeed }));
+          startUploadTest();
+        }
+      );
+    } catch (error) {
+      handleTestError("Failed to complete latency test. Please check your connection and try again.");
+    }
+  };
+  
+  const startUploadTest = () => {
+    setStage('upload');
+    setProgress(0);
+    setCurrentSpeed(0);
+    
+    toast({
+      title: "Download test completed",
+      description: `Speed: ${formatSpeed(results.download)} ${getUnitSuffix()}. Starting upload test...`,
+      duration: 3000,
+    });
+    
+    try {
       simulateUploadTest(
         (speed) => setCurrentSpeed(speed),
         (percent) => setProgress(percent),
@@ -96,23 +105,37 @@ export const useSpeedTest = () => {
           completeTest();
         }
       );
-    };
-    
-    const completeTest = () => {
-      setStage('completed');
-      playCompleteSound();
-      toast({
-        title: "Speed test completed!",
-        description: "All measurements finished successfully.",
-        duration: 4000,
-      });
-    };
+    } catch (error) {
+      handleTestError("Failed to complete upload test. Please check your connection and try again.");
+    }
+  };
+  
+  const completeTest = () => {
+    setStage('completed');
+    playCompleteSound();
+    toast({
+      title: "Speed test completed!",
+      description: "All measurements finished successfully.",
+      duration: 4000,
+    });
+  };
+  
+  const handleTestError = (errorMessage: string) => {
+    setError(errorMessage);
+    setStage('idle');
+    toast({
+      title: "Speed test error",
+      description: errorMessage,
+      variant: "destructive",
+      duration: 5000,
+    });
   };
   
   const resetTest = () => {
     setStage('idle');
     setProgress(0);
     setCurrentSpeed(0);
+    setError(null);
   };
   
   // Helper to get the right max value for the current test
@@ -140,6 +163,7 @@ export const useSpeedTest = () => {
     getUnitSuffix,
     startTest,
     resetTest,
-    getMaxValue
+    getMaxValue,
+    error
   };
 };

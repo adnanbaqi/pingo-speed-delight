@@ -1,17 +1,10 @@
 
 import { useState, useEffect, memo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-
-interface NetworkInfoData {
-  networkType: string;
-  networkName: string;
-  ipAddress: string;
-  provider: string;
-  connectionType: string;
-  deviceName: string;
-  browserName: string;
-  operatingSystem: string;
-}
+import { detectConnectionType, detectDeviceInfo, fetchIpAndProviderInfo, NetworkInfoData } from '@/lib/networkUtils';
+import NetworkInfoColumn from './NetworkInfoColumn';
+import { Network } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
 
 const NetworkInfo = memo(() => {
   const [networkInfo, setNetworkInfo] = useState<NetworkInfoData>({
@@ -25,184 +18,78 @@ const NetworkInfo = memo(() => {
     operatingSystem: 'Loading...'
   });
   const [isLoading, setIsLoading] = useState(true);
+  const { toast } = useToast();
 
   useEffect(() => {
     const fetchNetworkInfo = async () => {
       try {
-        // Get IP address information from a reliable public API
-        const ipResponse = await fetch('https://api.ipify.org?format=json');
-        const ipData = await ipResponse.json();
-        const ipv4Address = ipData.ip;
-
-        // Get more detailed IP information
-        const detailsResponse = await fetch(`https://ipapi.co/${ipv4Address}/json/`);
-        const detailsData = await detailsResponse.json();
+        // Get connection and device info from utility functions
+        const { networkType, connectionType } = detectConnectionType();
+        const { deviceName, browserName, operatingSystem } = detectDeviceInfo();
         
-        // Get connection information
-        const connection = (navigator as any).connection || 
-                          (navigator as any).mozConnection || 
-                          (navigator as any).webkitConnection;
-        
-        let connectionType = 'Unknown';
-        let networkType = 'Unknown';
-        
-        // Better network type detection
-        if (connection) {
-          // For connection type (speed)
-          connectionType = connection.effectiveType || 'Unknown';
-          
-          // For network type
-          if (connection.type) {
-            networkType = connection.type;
-          } else if (typeof navigator.onLine !== 'undefined') {
-            // Fallback to basic online/offline detection
-            networkType = navigator.onLine ? 'Online' : 'Offline';
-            
-            // Try to determine WiFi vs Cellular using the effectiveType
-            if (navigator.onLine) {
-              if (connection.effectiveType === '4g') {
-                networkType = 'WiFi/High-speed';
-              } else if (['3g', '2g', 'slow-2g'].includes(connection.effectiveType)) {
-                networkType = 'Cellular/Mobile';
-              }
-            }
-          }
-          
-          // Clean up terminology
-          if (networkType === 'wifi') networkType = 'WiFi';
-          if (networkType === 'cellular') networkType = 'Cellular';
-          if (connectionType === '4g') connectionType = '4G';
-          if (connectionType === '3g') connectionType = '3G';
-          if (connectionType === '2g') connectionType = '2G';
-          if (connectionType === 'slow-2g') connectionType = 'EDGE/GPRS';
-        } else {
-          // Further fallback for browsers without connection API
-          networkType = navigator.onLine ? 'Online (type unknown)' : 'Offline';
-        }
-        
-        // Get browser information
-        const userAgent = navigator.userAgent.toLowerCase();
-        
-        // Determine browser more accurately
-        let browserName = 'Unknown';
-        if (userAgent.indexOf("firefox") > -1) {
-          browserName = "Firefox";
-        } else if (userAgent.indexOf("edg") > -1 || userAgent.indexOf("edge") > -1) {
-          browserName = "Edge";
-        } else if (userAgent.indexOf("chrome") > -1) {
-          browserName = "Chrome";
-        } else if (userAgent.indexOf("safari") > -1) {
-          browserName = "Safari";
-        } else if (userAgent.indexOf("opera") > -1 || userAgent.indexOf("opr") > -1) {
-          browserName = "Opera";
-        }
-        
-        // Determine OS more accurately, specifically differentiating iOS and macOS
-        let osName = 'Unknown';
-        
-        // Mobile OS detection first
-        if (/iphone|ipad|ipod/.test(userAgent)) {
-          osName = "iOS";
-        } else if (/android/.test(userAgent)) {
-          osName = "Android";
-        } 
-        // Then desktop OS detection
-        else if (/windows/.test(userAgent)) {
-          osName = "Windows";
-        } else if (/macintosh|mac os x/.test(userAgent) && !(/iphone|ipad|ipod/.test(userAgent))) {
-          osName = "macOS"; // Only mark as macOS if not also detected as iOS device
-        } else if (/linux/.test(userAgent)) {
-          osName = "Linux";
-        }
-        
-        // Get device type/name
-        let deviceName = 'Unknown';
-        if (/iphone/.test(userAgent)) {
-          deviceName = "iPhone";
-        } else if (/ipad/.test(userAgent)) {
-          deviceName = "iPad";
-        } else if (/android/.test(userAgent)) {
-          if (/mobile/.test(userAgent)) {
-            deviceName = "Android Phone";
-          } else {
-            deviceName = "Android Tablet";
-          }
-        } else {
-          deviceName = osName + " Device"; // Desktop/laptop
-        }
+        // Fetch IP and provider info
+        const { ipAddress, provider, networkName } = await fetchIpAndProviderInfo();
         
         setNetworkInfo({
-          networkType: networkType,
-          networkName: detailsData.org || 'Unknown',
-          ipAddress: ipv4Address,
-          provider: detailsData.org || detailsData.isp || 'Unknown',
-          connectionType: connectionType,
-          deviceName: deviceName,
-          browserName: browserName,
-          operatingSystem: osName
+          networkType,
+          networkName,
+          ipAddress,
+          provider,
+          connectionType,
+          deviceName,
+          browserName,
+          operatingSystem
         });
         
         setIsLoading(false);
       } catch (error) {
         console.error('Error fetching network information:', error);
-        // Provide fallback values if API calls fail
-        setNetworkInfo(prev => ({
-          ...prev,
-          ipAddress: '127.0.0.1', // Fallback
-          provider: 'Could not determine',
-        }));
+        toast({
+          title: "Network Detection Issue",
+          description: "We couldn't retrieve all your network information. Some details may be limited.",
+          variant: "destructive"
+        });
         setIsLoading(false);
       }
     };
     
     fetchNetworkInfo();
-  }, []);
+  }, [toast]);
+  
+  // Organize info items for each column
+  const leftColumnItems = [
+    { label: "Network Type", value: networkInfo.networkType, ariaLabel: "Your network type" },
+    { label: "Network Name", value: networkInfo.networkName, ariaLabel: "Your network name" },
+    { label: "IP Address", value: networkInfo.ipAddress, ariaLabel: "Your IP address" },
+    { label: "Provider", value: networkInfo.provider, ariaLabel: "Your internet service provider" }
+  ];
+  
+  const rightColumnItems = [
+    { label: "Connection Type", value: networkInfo.connectionType, ariaLabel: "Your connection type" },
+    { label: "Device", value: networkInfo.deviceName, ariaLabel: "Your device type" },
+    { label: "Browser", value: networkInfo.browserName, ariaLabel: "Your browser" },
+    { label: "OS", value: networkInfo.operatingSystem, ariaLabel: "Your operating system" }
+  ];
   
   return (
     <Card className="glass-dark">
       <CardHeader>
-        <CardTitle className="text-xl">Network Information</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="space-y-2">
-            <div>
-              <h3 className="text-sm font-medium text-muted-foreground">Network Type</h3>
-              <p>{networkInfo.networkType}</p>
-            </div>
-            <div>
-              <h3 className="text-sm font-medium text-muted-foreground">Network Name</h3>
-              <p>{networkInfo.networkName}</p>
-            </div>
-            <div>
-              <h3 className="text-sm font-medium text-muted-foreground">IP Address</h3>
-              <p>{networkInfo.ipAddress}</p>
-            </div>
-            <div>
-              <h3 className="text-sm font-medium text-muted-foreground">Provider</h3>
-              <p>{networkInfo.provider}</p>
-            </div>
-          </div>
-          
-          <div className="space-y-2">
-            <div>
-              <h3 className="text-sm font-medium text-muted-foreground">Connection Type</h3>
-              <p>{networkInfo.connectionType}</p>
-            </div>
-            <div>
-              <h3 className="text-sm font-medium text-muted-foreground">Device</h3>
-              <p>{networkInfo.deviceName}</p>
-            </div>
-            <div>
-              <h3 className="text-sm font-medium text-muted-foreground">Browser</h3>
-              <p>{networkInfo.browserName}</p>
-            </div>
-            <div>
-              <h3 className="text-sm font-medium text-muted-foreground">OS</h3>
-              <p>{networkInfo.operatingSystem}</p>
-            </div>
-          </div>
+        <div className="flex items-center gap-2">
+          <Network className="h-5 w-5" aria-hidden="true" />
+          <CardTitle className="text-xl">Network Information</CardTitle>
         </div>
+      </CardHeader>
+      <CardContent aria-busy={isLoading} aria-live="polite">
+        {isLoading ? (
+          <div className="flex justify-center my-4">
+            <div className="animate-pulse-ring h-8 w-8 rounded-full border-b-2 border-primary"></div>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <NetworkInfoColumn items={leftColumnItems} />
+            <NetworkInfoColumn items={rightColumnItems} />
+          </div>
+        )}
       </CardContent>
     </Card>
   );

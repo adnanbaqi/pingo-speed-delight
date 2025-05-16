@@ -10,24 +10,44 @@ export const simulatePing = async (): Promise<number> => {
       'https://www.google.com',
       'https://www.cloudflare.com',
       'https://www.microsoft.com',
-      'https://www.amazon.com'
+      'https://www.amazon.com',
+      'https://www.apple.com',
+      'https://www.netflix.com'
     ];
+    
+    // Create an AbortController to handle timeouts
+    const controller = new AbortController();
+    const { signal } = controller;
+    
+    // Set a timeout for the entire ping test
+    const timeout = setTimeout(() => {
+      controller.abort();
+      resolve(500); // Return a high latency value if all pings timeout
+    }, 5000);
     
     const pingPromises = endpoints.map(endpoint => {
       return new Promise<number>((resolveEndpoint) => {
         const startTime = performance.now();
         
+        // Set timeout for individual endpoint
+        const endpointTimeout = setTimeout(() => {
+          resolveEndpoint(1500);
+        }, 1500);
+        
         fetch(`${endpoint}/favicon.ico?cachebust=${Date.now()}`, { 
           mode: 'no-cors',
           cache: 'no-store',
-          credentials: 'omit', // Avoid sending cookies for faster requests
-          priority: 'high',    // Signal high priority to browser
+          credentials: 'omit',
+          priority: 'high',
+          signal
         })
         .then(() => {
+          clearTimeout(endpointTimeout);
           const latency = performance.now() - startTime;
           resolveEndpoint(latency);
         })
         .catch(() => {
+          clearTimeout(endpointTimeout);
           // Try with image as fallback (works better in some browsers)
           const img = new Image();
           const imgStartTime = performance.now();
@@ -38,15 +58,14 @@ export const simulatePing = async (): Promise<number> => {
           };
           
           img.src = `${endpoint}/favicon.ico?cachebust=${Date.now()}`;
-          
-          // Set timeout for this endpoint
-          setTimeout(() => resolveEndpoint(1500), 1500);
         });
       });
     });
     
     // Calculate median latency from all endpoints
     Promise.all(pingPromises).then(results => {
+      clearTimeout(timeout);
+      
       // Filter out timeouts and failures
       const validResults = results.filter(time => time < 1500);
       
