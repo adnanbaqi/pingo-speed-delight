@@ -13,7 +13,7 @@ export const simulateDownloadTest = (
 ): TestController => {
   let isCancelled = false;
   let testStartTime = performance.now();
-  const testDuration = 9000; // 10 seconds
+  const testDuration = 30000; // 10 seconds
   const dataPoints: number[] = [];
   let lastReportedSpeed = 0;
   
